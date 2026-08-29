@@ -82,6 +82,10 @@ return (
                             Meal Booking
                         </div>
 
+                        <div onClick={() => navigate("/meal/advance/booking")} className="px-4 py-2 rounded-lg hover:bg-white/20 cursor-pointer text-sm">
+                            Advance Booking
+                        </div>
+
                         <div onClick={() => navigate("/meal/serving")} className="px-4 py-2 rounded-lg hover:bg-white/20 cursor-pointer text-sm">
                             Meal Serving
                         </div>

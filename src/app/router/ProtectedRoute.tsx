@@ -6,7 +6,7 @@ interface Props {
     roles?: string[];
 }
 
-const ProtectedRoute = ({ children, roles }: Props) => {
+const ProtectedRoute = ({ children }: Props) => {
     const token = getToken();
 
     if (!token) {

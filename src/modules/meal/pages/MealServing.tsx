@@ -39,7 +39,6 @@ interface MealType {
 
 interface MenuItem {
     id: number;
-    Item_name?: string;
     item_name?: string;
     item_type: "Main" | "Alternative";
     alternative_of: number | null;
