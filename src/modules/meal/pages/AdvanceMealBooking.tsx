@@ -274,7 +274,7 @@ export default function AdvanceMealBooking() {
             );
 
         } finally {
-
+            selectAll();
             setLoading(false);
 
         }
