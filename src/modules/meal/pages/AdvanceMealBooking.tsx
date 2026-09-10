@@ -1,14 +1,13 @@
 import {
     CalendarDays,
     Check,
-    ChevronLeft,
-    ChevronRight,
+   
     Clock3,
-    Coffee,
+   
     Loader2,
     Lock,
     RefreshCw,
-    Utensils,
+    
     X,
 } from "lucide-react";
 
@@ -197,9 +196,6 @@ export default function AdvanceMealBooking() {
 
     const [error, setError] =
         useState("");
-
-    const [currentPage, setCurrentPage] =
-        useState(0);
 
 
     // ========================================================
@@ -595,18 +591,15 @@ export default function AdvanceMealBooking() {
         <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-indigo-100 flex">
 
             <SideNav
-                open={openSidebar}
-                onClose={() =>
-                    setOpenSidebar(false)
-                }
+                openSidebar={openSidebar}
+                setOpenSidebar={setOpenSidebar}
             />
 
             <div className="flex-1 min-w-0">
 
                 <TopNav
-                    onMenuClick={() =>
-                        setOpenSidebar(true)
-                    }
+                    openSidebar={openSidebar}
+                    setOpenSidebar={setOpenSidebar}
                 />
 
 

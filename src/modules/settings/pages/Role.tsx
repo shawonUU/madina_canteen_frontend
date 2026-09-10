@@ -1,7 +1,5 @@
-import { Bell, Search, User, ChevronDown, Settings, LogOut, UserCircle, Plus, Edit, Trash2, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { logout } from "../../auth/services/authService";
+import { Plus, Edit, Trash2, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 import SideNav from "../../dashboard/components/side-nav";
 import TopNav from "../../dashboard/components/top-nav";
 import api from "../../../services/api";
@@ -10,10 +8,9 @@ interface Permission { id:number; name:string; }
 interface Role { id:number; name:string; permissions:Permission[]; }
 
 export default function RolePage(){
-  const navigate=useNavigate();
-  const [openProfile,setOpenProfile]=useState(false);
+  // const [setOpenProfile]=useState(false);
   const [openSidebar,setOpenSidebar]=useState(false);
-  const profileRef=useRef<HTMLDivElement>(null);
+  // const profileRef=useRef<HTMLDivElement>(null);
   const [roles,setRoles]=useState<Role[]>([]);
   const [permissions,setPermissions]=useState<Permission[]>([]);
   const [openModal,setOpenModal]=useState(false);
@@ -21,15 +18,13 @@ export default function RolePage(){
   const [editId,setEditId]=useState<number|null>(null);
   const [selectedPermissions,setSelectedPermissions]=useState<number[]>([]);
 
-  const handleLogout=()=>{ logout(); navigate("/login"); };
-
-  useEffect(()=>{
-    const handleClickOutside=(e:MouseEvent)=>{
-      if(profileRef.current && !profileRef.current.contains(e.target as Node)) setOpenProfile(false);
-    };
-    document.addEventListener("mousedown",handleClickOutside);
-    return()=>document.removeEventListener("mousedown",handleClickOutside);
-  },[]);
+  // useEffect(()=>{
+  //   const handleClickOutside=(e:MouseEvent)=>{
+  //     if(profileRef.current && !profileRef.current.contains(e.target as Node)) setOpenProfile(false);
+  //   };
+  //   document.addEventListener("mousedown",handleClickOutside);
+  //   return()=>document.removeEventListener("mousedown",handleClickOutside);
+  // },[]);
 
   const loadRoles=async()=>{ const res=await api.get("/roles"); setRoles(res.data); };
   const loadPermissions=async()=>{ const res=await api.get("/permissions"); setPermissions(res.data); };

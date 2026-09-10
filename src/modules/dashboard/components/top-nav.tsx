@@ -12,7 +12,8 @@ import { useNavigate } from "react-router-dom";
 import { logout } from "../../auth/services/authService";
 
 interface TopNavProps {
-    setOpenSidebar: (value: boolean) => void;
+  openSidebar: boolean;
+  setOpenSidebar: (value: boolean) => void;
 }
 
 export default function TopNav({

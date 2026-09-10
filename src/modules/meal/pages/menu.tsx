@@ -7,10 +7,8 @@ import {
     X,
     RefreshCw,
     Search,
-    CalendarDays,
     Eye,
     GitBranch,
-    ChevronDown,
 } from "lucide-react";
 
 import { useEffect, useMemo, useState } from "react";

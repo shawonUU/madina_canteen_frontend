@@ -217,7 +217,7 @@ export default function MealServing() {
     ) => {
 
         return (
-            item.menu_item?.item_name ||
+            item.menuItem?.item_name ||
             `Item #${item.menu_item_id}`
         );
 

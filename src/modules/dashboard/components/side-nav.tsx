@@ -19,7 +19,6 @@ export default function SideNav({ openSidebar, setOpenSidebar }: SidebarProps) {
     const [openMealManagement, setOpenMealManagement] = useState(false);
     const [openReportManagement, setOpenReportManagement] = useState(false);
     const navigate = useNavigate();
-    // const [openSidebar, setOpenSidebar] = useState(false);
 return (
     <aside
         className={`

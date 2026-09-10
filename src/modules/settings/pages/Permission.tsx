@@ -1,7 +1,7 @@
-import { Bell, Search, User, ChevronDown, Settings, LogOut, UserCircle, Plus, Edit, Trash2, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { logout } from "../../auth/services/authService";
+import {Plus, Edit, Trash2, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+// import { useNavigate } from "react-router-dom";
+// import { logout } from "../../auth/services/authService";
 import SideNav from "../../dashboard/components/side-nav";
 import api from "../../../services/api";
 import TopNav from "../../dashboard/components/top-nav";
@@ -9,24 +9,24 @@ import TopNav from "../../dashboard/components/top-nav";
 interface Permission { id:number; name:string; }
 
 export default function PermissionPage(){
-  const [openProfile,setOpenProfile]=useState(false);
-  const [openSettings,setOpenSettings]=useState(false);
+  // const [openProfile,setOpenProfile]=useState(false);
+  // const [openSettings,setOpenSettings]=useState(false);
   const [openSidebar,setOpenSidebar]=useState(false);
-  const profileRef=useRef<HTMLDivElement>(null);
-  const navigate=useNavigate();
+  // const profileRef=useRef<HTMLDivElement>(null);
+  // const navigate=useNavigate();
   const [permissions,setPermissions]=useState<Permission[]>([]);
   const [name,setName]=useState("");
   const [editId,setEditId]=useState<number|null>(null);
 
-  const handleLogout=()=>{ logout(); navigate("/login"); };
+  // const handleLogout=()=>{ logout(); navigate("/login"); };
 
-  useEffect(()=>{
-    const handleClickOutside=(e:MouseEvent)=>{
-      if(profileRef.current && !profileRef.current.contains(e.target as Node)){ setOpenProfile(false); setOpenSettings(false); }
-    };
-    document.addEventListener("mousedown",handleClickOutside);
-    return()=>document.removeEventListener("mousedown",handleClickOutside);
-  },[]);
+  // useEffect(()=>{
+  //   const handleClickOutside=(e:MouseEvent)=>{
+  //     if(profileRef.current && !profileRef.current.contains(e.target as Node)){ setOpenProfile(false); setOpenSettings(false); }
+  //   };
+  //   document.addEventListener("mousedown",handleClickOutside);
+  //   return()=>document.removeEventListener("mousedown",handleClickOutside);
+  // },[]);
 
   const loadPermission=async()=>{ const res=await api.get("/permissions"); setPermissions(res.data); };
   useEffect(()=>{ loadPermission(); },[]);
