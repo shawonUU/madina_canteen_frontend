@@ -1314,7 +1314,7 @@ const MealSelection: React.FC = () => {
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5 pt-0">
               {/* Date */}
-              <div className="rounded-xl bg-slate-50 p-4 pt-0">
+              <div className="rounded-xl bg-slate-50 p-0 px-4">
                 <p className="text-xs font-medium text-slate-500 hidden">
                   Date
                 </p>
@@ -1339,10 +1339,6 @@ const MealSelection: React.FC = () => {
 
               {/* Meals & Menus */}
               <div>
-                <p className="mb-2 text-xs font-medium text-slate-500">
-                  Selected Meals & Menus
-                </p>
-
                 <div className="space-y-2">
                   {selectedMeals.map(
                     (meal) => {
@@ -1363,23 +1359,7 @@ const MealSelection: React.FC = () => {
                           className="rounded-xl border border-slate-200 p-3"
                         >
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="text-blue-600">
-                                {
-                                  mealInfo[
-                                    meal
-                                  ].icon
-                                }
-                              </div>
-
-                              <span className="text-sm font-semibold text-slate-800">
-                                {
-                                  mealInfo[
-                                    meal
-                                  ].title
-                                }
-                              </span>
-                            </div>
+                           
 
                             {menu ? (
                               <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-600">
