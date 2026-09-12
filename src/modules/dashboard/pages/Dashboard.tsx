@@ -46,7 +46,7 @@ interface MealStatistics {
 
 interface MenuItem {
     id: number;
-    item_name: string;
+    name: string;
     item_type: "Main" | "Alternative";
     alternative_of: number | null;
 }
@@ -999,7 +999,7 @@ export default function Dashboard() {
                                                                             />
 
                                                                             {
-                                                                                mainItem.item_name
+                                                                                mainItem.name
                                                                             }
 
                                                                         </span>
@@ -1020,7 +1020,7 @@ export default function Dashboard() {
                                                                                     />
 
                                                                                     {
-                                                                                        alternative.item_name
+                                                                                        alternative.name
                                                                                     }
 
                                                                                 </span>

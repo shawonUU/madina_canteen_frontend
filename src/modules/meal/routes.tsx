@@ -3,7 +3,6 @@ import MealType from "../meal/pages/meal-type";
 import Menu from "../meal/pages/menu";
 import Booking from "../meal/pages/booking";
 import MealServing from "../meal/pages/MealServing";
-import AdvanceMealBooking from "../meal/pages/AdvanceMealBooking";
 
 const dashboardRoutes = [
     {
@@ -39,16 +38,6 @@ const dashboardRoutes = [
             </ProtectedRoute>
         ),
     },
-
-    {
-        path: "/meal/advance/booking",
-        element: (
-            <ProtectedRoute roles={["admin"]}>
-                <AdvanceMealBooking />
-            </ProtectedRoute>
-        ),
-    },
-
 ];
 
 export default dashboardRoutes;

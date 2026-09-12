@@ -30,14 +30,14 @@ interface MealType {
 
 interface AlternativeItem {
     id: number;
-    item_name: string;
+    name: string;
     item_type: "Alternative";
     alternative_of: number;
 }
 
 interface MenuItem {
     id?: number;
-    item_name: string;
+    name: string;
     item_type?: "Main";
     alternate?: AlternativeItem | null;
 }
@@ -101,7 +101,7 @@ export default function MenuPage() {
 
     const [items, setItems] = useState<MenuItem[]>([
         {
-            item_name: "",
+            name: "",
             alternate: null,
         },
     ]);
@@ -212,7 +212,7 @@ export default function MenuPage() {
 
         setItems([
             {
-                item_name: "",
+                name: "",
                 alternate: null,
             },
         ]);
@@ -249,13 +249,13 @@ export default function MenuPage() {
             const mappedItems: MenuItem[] =
                 (data.items || []).map((item) => ({
                     id: item.id,
-                    item_name: item.item_name,
+                    name: item.name,
 
                     alternate: item.alternate
                         ? {
                             id: item.alternate.id,
-                            item_name:
-                                item.alternate.item_name,
+                            name:
+                                item.alternate.name,
                             item_type: "Alternative",
                             alternative_of:
                                 item.id as number,
@@ -268,7 +268,7 @@ export default function MenuPage() {
                     ? mappedItems
                     : [
                         {
-                            item_name: "",
+                            name: "",
                             alternate: null,
                         },
                     ]
@@ -304,7 +304,7 @@ export default function MenuPage() {
 
         setItems([
             {
-                item_name: "",
+                name: "",
                 alternate: null,
             },
         ]);
@@ -319,7 +319,7 @@ export default function MenuPage() {
         setItems((prev) => [
             ...prev,
             {
-                item_name: "",
+                name: "",
                 alternate: null,
             },
         ]);
@@ -346,7 +346,7 @@ export default function MenuPage() {
                 i === index
                     ? {
                         ...item,
-                        item_name: value,
+                        name: value,
                     }
                     : item
             )
@@ -370,7 +370,7 @@ export default function MenuPage() {
                         ...item,
                         alternate: {
                             ...item.alternate,
-                            item_name: value,
+                            name: value,
                         },
                     };
                 }
@@ -381,7 +381,7 @@ export default function MenuPage() {
                         value.trim()
                             ? {
                                 id: 0,
-                                item_name: value,
+                                name: value,
                                 item_type:
                                     "Alternative",
                                 alternative_of:
@@ -437,11 +437,11 @@ export default function MenuPage() {
                     ? { id: item.id }
                     : {}),
 
-                item_name:
-                    item.item_name.trim(),
+                name:
+                    item.name.trim(),
 
-                alternate_item_name:
-                    item.alternate?.item_name?.trim() ||
+                alternate_name:
+                    item.alternate?.name?.trim() ||
                     null,
 
                 ...(item.alternate?.id &&
@@ -457,7 +457,7 @@ export default function MenuPage() {
         if (
             cleanedItems.some(
                 (item) =>
-                    !item.item_name
+                    !item.name
             )
         ) {
             alert(
@@ -1053,7 +1053,7 @@ export default function MenuPage() {
 
                                                             <span className="truncate">
                                                                 {
-                                                                    item.item_name
+                                                                    item.name
                                                                 }
                                                             </span>
 
@@ -1061,7 +1061,7 @@ export default function MenuPage() {
                                                             {item.alternate && (
 
                                                                 <span
-                                                                    title={`Alternative: ${item.alternate.item_name}`}
+                                                                    title={`Alternative: ${item.alternate.name}`}
                                                                     className="text-amber-500 shrink-0"
                                                                 >
                                                                     <GitBranch
@@ -1255,7 +1255,7 @@ export default function MenuPage() {
 
                                                                 <span className="font-semibold text-slate-700">
                                                                     {
-                                                                        item.item_name
+                                                                        item.name
                                                                     }
                                                                 </span>
 
@@ -1267,7 +1267,7 @@ export default function MenuPage() {
                                                                         {
                                                                             item
                                                                                 .alternate
-                                                                                .item_name
+                                                                                .name
                                                                         }
                                                                     </span>
 
@@ -1524,7 +1524,7 @@ export default function MenuPage() {
                                                     <input
                                                         type="text"
                                                         value={
-                                                            item.item_name
+                                                            item.name
                                                         }
                                                         onChange={(e) =>
                                                             updateItemName(
@@ -1561,7 +1561,7 @@ export default function MenuPage() {
                                                             value={
                                                                 item
                                                                     .alternate
-                                                                    ?.item_name ||
+                                                                    ?.name ||
                                                                 ""
                                                             }
                                                             onChange={(e) =>
@@ -1577,7 +1577,7 @@ export default function MenuPage() {
 
                                                         {item
                                                             .alternate
-                                                            ?.item_name && (
+                                                            ?.name && (
 
                                                             <button
                                                                 type="button"
@@ -1816,7 +1816,7 @@ export default function MenuPage() {
 
                                                     <p className="text-sm font-bold text-slate-700 truncate">
                                                         {
-                                                            item.item_name
+                                                            item.name
                                                         }
                                                     </p>
 
@@ -1854,7 +1854,7 @@ export default function MenuPage() {
                                                                 {
                                                                     item
                                                                         .alternate
-                                                                        .item_name
+                                                                        .name
                                                                 }
                                                             </p>
 
