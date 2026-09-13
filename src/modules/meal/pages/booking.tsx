@@ -664,6 +664,29 @@ const MealSelection = () => {
     );
   };
 
+  useEffect(() => {
+      if (!menus.length || !lunchMealType || !bookingDates.length) {
+          return;
+      }
+
+      setSelectedMenus((prev) => {
+          const next = { ...prev };
+
+          bookingDates.forEach((date) => {
+              const key = getSelectionKey(date);
+              if (next[key]) {
+                  return;
+              }
+              const dateMenus = getMenusForDate(date);
+              if (dateMenus.length > 0) {
+                  next[key] = dateMenus[0];
+              }
+          });
+
+          return next;
+      });
+  }, [menus, lunchMealType, bookingDates]);
+
   const resetForm = () => {
     setBookingMode("today");
 

@@ -1384,7 +1384,7 @@ export default function MenuPage() {
 
                                     <input
                                         type="date"
-                                        readOnly
+        
                                         value={
                                             menuDate
                                         }
