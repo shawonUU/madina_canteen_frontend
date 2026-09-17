@@ -1,5 +1,5 @@
 import authRoutes from "../../modules/auth/routes";
-// import employeeRoutes from "../../modules/employee/routes";
+import employeeRoutes from "../../modules/employee/routes";
 import dashboardRoutes from "../../modules/dashboard/routes";
 import settingsRoutes from "../../modules/settings/routes";
 import mealRoutes from "../../modules/meal/routes";
@@ -23,7 +23,7 @@ export const routes = [
  
     ...reportsRoutes,
 
-//  ...employeeRoutes
+ ...employeeRoutes
 
 ];
 

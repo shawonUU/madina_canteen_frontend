@@ -17,6 +17,7 @@ interface SidebarProps {
 export default function SideNav({ openSidebar, setOpenSidebar }: SidebarProps) {
     const [openSidebarSettings, setOpenSidebarSettings] = useState(false);
     const [openMealManagement, setOpenMealManagement] = useState(false);
+    const [openEmployeeManagement, setOpenEmployeeManagement] = useState(false);
     const [openReportManagement, setOpenReportManagement] = useState(false);
     const navigate = useNavigate();
 return (
@@ -89,8 +90,36 @@ return (
                         
                     </div>
             </div>
-            <div className="px-4 py-3 m-0 rounded-xl hover:bg-white/20 cursor-pointer transition">
-                Employees
+             <div className="m-0">
+                <div
+                    onClick={() => setOpenEmployeeManagement(!openEmployeeManagement)}
+                    className="px-4 py-3 rounded-xl hover:bg-white/20 cursor-pointer transition flex justify-between items-center"
+                >
+                    <span>
+                        Employee Management
+                    </span>
+
+                    <ChevronDown
+                        size={18}
+                        className={`transition ${
+                            openEmployeeManagement ? "rotate-180" : ""
+                        }`}
+                    />
+
+                </div>
+
+
+                    <div className={`
+                        ml-5 mt-2 space-y-2 
+                        overflow-hidden
+                        transition-all duration-300 ease-in-out
+                        ${openEmployeeManagement ? "max-h-150 opacity-100" : "max-h-0 opacity-0"}
+                    `}>
+
+                        <div onClick={() => navigate("/employee/list")} className="px-4 py-2 rounded-lg hover:bg-white/20 cursor-pointer text-sm">
+                            Employee List
+                        </div>
+                    </div>
             </div>
             <div className="m-0">
                 <div

@@ -1,18 +1,18 @@
 import EmployeeList from "./pages/EmployeeList";
-import EmployeeCreate from "./pages/EmployeeCreate";
+// import EmployeeCreate from "./pages/EmployeeCreate";
 
 
 const employeeRoutes=[
 
 {
- path:"/employees",
+ path:"/employee/list",
  element:<EmployeeList/>
 },
 
-{
- path:"/employees/create",
- element:<EmployeeCreate/>
-}
+// {
+//  path:"/employees/create",
+//  element:<EmployeeCreate/>
+// }
 
 ];
 
