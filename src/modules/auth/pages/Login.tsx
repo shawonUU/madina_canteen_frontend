@@ -190,25 +190,25 @@ export default function Login() {
   const getCharacterMessage = () => {
     switch (character) {
       case "idle":
-        return "Welcome to our canteen! 👨‍🍳";
+        return "Welcome! 👨‍🍳";
 
       case "watching":
-        return "Looking for your order? 👀";
+        return "Ready to sign in? 👀";
 
       case "hiding":
         return "I won't peek! 🙈";
 
       case "thinking":
-        return "Checking your order... 🤔";
+        return "Checking your credentials... 🤔";
 
       case "loading":
-        return "Almost ready! 🍽️";
+        return "Signing you in... 🔐";
 
       case "error":
-        return "Oops! Wrong order? 😵";
+        return "Oops! Please check your details. 😵";
 
       case "success":
-        return "Order confirmed! 🎉";
+        return "Login successful! 🎉";
 
       default:
         return "Welcome! 👨‍🍳";
