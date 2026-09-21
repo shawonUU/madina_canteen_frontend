@@ -605,6 +605,202 @@ export default function Dashboard() {
                     </div>
 
 
+                    
+                    <div className="mt-6 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+
+                        <div className="px-6 py-5 border-b border-gray-100">
+
+                            <div className="flex items-center justify-between">
+
+                                <div className="flex items-center gap-3">
+
+                                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center">
+
+                                        <Utensils
+                                            size={21}
+                                            className="text-white"
+                                        />
+
+                                    </div>
+
+                                    <div>
+
+                                        <h3 className="text-xl font-bold text-gray-800">
+                                            Today's Menu
+                                        </h3>
+
+                                        <p className="text-sm text-gray-400">
+                                            Today's scheduled meal items
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="p-6">
+
+                            {menus.length === 0 ? (
+
+                                <div className="py-10 text-center">
+
+                                    <Utensils
+                                        size={32}
+                                        className="mx-auto text-gray-300"
+                                    />
+
+                                    <p className="mt-3 font-semibold text-gray-600">
+                                        No menu available today
+                                    </p>
+
+                                </div>
+
+                            ) : (
+
+                                <div className="space-y-7">
+
+                                    {menus.map(
+                                        (menu) => {
+
+                                            const mainItems =
+                                                menu.items?.filter(
+                                                    item =>
+                                                        item.item_type ===
+                                                        "Main"
+                                                ) || [];
+
+                                            const alternatives =
+                                                menu.items?.filter(
+                                                    item =>
+                                                        item.item_type ===
+                                                        "Alternative"
+                                                ) || [];
+
+
+                                            return (
+
+                                                <div
+                                                    key={
+                                                        menu.id
+                                                    }
+                                                >
+
+                                                    <div className="flex items-center gap-3 mb-4">
+
+                                                        <div className="h-px flex-1 bg-gray-100" />
+
+                                                        <div className="flex items-center gap-2">
+
+                                                            <span className="font-bold text-gray-700">
+                                                                {
+                                                                    menu.meal_type?.name
+                                                                }
+                                                            </span>
+
+                                                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold">
+                                                                {
+                                                                    mainItems.length
+                                                                }{" "}
+                                                                Items
+                                                            </span>
+
+                                                        </div>
+
+                                                        <div className="h-px flex-1 bg-gray-100" />
+
+                                                    </div>
+
+
+                                                    <div className="flex flex-wrap gap-3">
+
+                                                        {mainItems.map(
+                                                            mainItem => {
+
+                                                                const itemAlternatives =
+                                                                    alternatives.filter(
+                                                                        alternative =>
+                                                                            Number(
+                                                                                alternative.alternative_of
+                                                                            ) ===
+                                                                            Number(
+                                                                                mainItem.id
+                                                                            )
+                                                                    );
+
+                                                                return (
+
+                                                                    <div
+                                                                        key={
+                                                                            mainItem.id
+                                                                        }
+                                                                        className="flex items-center gap-2"
+                                                                    >
+
+                                                                        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-semibold shadow-sm">
+
+                                                                            <Utensils
+                                                                                size={13}
+                                                                            />
+
+                                                                            {
+                                                                                mainItem.name
+                                                                            }
+
+                                                                        </span>
+
+
+                                                                        {itemAlternatives.map(
+                                                                            alternative => (
+
+                                                                                <span
+                                                                                    key={
+                                                                                        alternative.id
+                                                                                    }
+                                                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold"
+                                                                                >
+
+                                                                                    <Sparkles
+                                                                                        size={11}
+                                                                                    />
+
+                                                                                    {
+                                                                                        alternative.name
+                                                                                    }
+
+                                                                                </span>
+
+                                                                            )
+                                                                        )}
+
+                                                                    </div>
+
+                                                                );
+
+                                                            }
+                                                        )}
+
+                                                    </div>
+
+                                                </div>
+
+                                            );
+
+                                        }
+                                    )}
+
+                                </div>
+
+                            )}
+
+                        </div>
+
+                    </div>
+
+
                     {/* Second Row */}
 
                     <div className="grid lg:grid-cols-3 gap-6 mt-6">
@@ -856,202 +1052,7 @@ export default function Dashboard() {
                     </div>
 
 
-                    {/* Today's Menu */}
-
-                    <div className="mt-6 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-
-                        <div className="px-6 py-5 border-b border-gray-100">
-
-                            <div className="flex items-center justify-between">
-
-                                <div className="flex items-center gap-3">
-
-                                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center">
-
-                                        <Utensils
-                                            size={21}
-                                            className="text-white"
-                                        />
-
-                                    </div>
-
-                                    <div>
-
-                                        <h3 className="text-xl font-bold text-gray-800">
-                                            Today's Menu
-                                        </h3>
-
-                                        <p className="text-sm text-gray-400">
-                                            Today's scheduled meal items
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-
-                        <div className="p-6">
-
-                            {menus.length === 0 ? (
-
-                                <div className="py-10 text-center">
-
-                                    <Utensils
-                                        size={32}
-                                        className="mx-auto text-gray-300"
-                                    />
-
-                                    <p className="mt-3 font-semibold text-gray-600">
-                                        No menu available today
-                                    </p>
-
-                                </div>
-
-                            ) : (
-
-                                <div className="space-y-7">
-
-                                    {menus.map(
-                                        (menu) => {
-
-                                            const mainItems =
-                                                menu.items?.filter(
-                                                    item =>
-                                                        item.item_type ===
-                                                        "Main"
-                                                ) || [];
-
-                                            const alternatives =
-                                                menu.items?.filter(
-                                                    item =>
-                                                        item.item_type ===
-                                                        "Alternative"
-                                                ) || [];
-
-
-                                            return (
-
-                                                <div
-                                                    key={
-                                                        menu.id
-                                                    }
-                                                >
-
-                                                    <div className="flex items-center gap-3 mb-4">
-
-                                                        <div className="h-px flex-1 bg-gray-100" />
-
-                                                        <div className="flex items-center gap-2">
-
-                                                            <span className="font-bold text-gray-700">
-                                                                {
-                                                                    menu.meal_type?.name
-                                                                }
-                                                            </span>
-
-                                                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold">
-                                                                {
-                                                                    mainItems.length
-                                                                }{" "}
-                                                                Items
-                                                            </span>
-
-                                                        </div>
-
-                                                        <div className="h-px flex-1 bg-gray-100" />
-
-                                                    </div>
-
-
-                                                    <div className="flex flex-wrap gap-3">
-
-                                                        {mainItems.map(
-                                                            mainItem => {
-
-                                                                const itemAlternatives =
-                                                                    alternatives.filter(
-                                                                        alternative =>
-                                                                            Number(
-                                                                                alternative.alternative_of
-                                                                            ) ===
-                                                                            Number(
-                                                                                mainItem.id
-                                                                            )
-                                                                    );
-
-                                                                return (
-
-                                                                    <div
-                                                                        key={
-                                                                            mainItem.id
-                                                                        }
-                                                                        className="flex items-center gap-2"
-                                                                    >
-
-                                                                        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-semibold shadow-sm">
-
-                                                                            <Utensils
-                                                                                size={13}
-                                                                            />
-
-                                                                            {
-                                                                                mainItem.name
-                                                                            }
-
-                                                                        </span>
-
-
-                                                                        {itemAlternatives.map(
-                                                                            alternative => (
-
-                                                                                <span
-                                                                                    key={
-                                                                                        alternative.id
-                                                                                    }
-                                                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold"
-                                                                                >
-
-                                                                                    <Sparkles
-                                                                                        size={11}
-                                                                                    />
-
-                                                                                    {
-                                                                                        alternative.name
-                                                                                    }
-
-                                                                                </span>
-
-                                                                            )
-                                                                        )}
-
-                                                                    </div>
-
-                                                                );
-
-                                                            }
-                                                        )}
-
-                                                    </div>
-
-                                                </div>
-
-                                            );
-
-                                        }
-                                    )}
-
-                                </div>
-
-                            )}
-
-                        </div>
-
-                    </div>
-
+            
 
                     {/* Recent Bookings */}
 

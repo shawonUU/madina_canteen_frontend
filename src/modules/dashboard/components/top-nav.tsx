@@ -10,6 +10,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../auth/services/authService";
+import { getUser } from "../../../services/storage";
 
 interface TopNavProps {
   openSidebar: boolean;
@@ -133,7 +134,7 @@ export default function TopNav({
                         </div>
 
                         <span className="hidden sm:block text-sm font-medium text-gray-700">
-                            Sawon
+                            {getUser()?.name || "User"}
                         </span>
 
                         <ChevronDown
@@ -161,7 +162,7 @@ export default function TopNav({
                                 </p>
 
                                 <p className="text-xs text-gray-500 mt-1">
-                                    IT Officer
+                                    {getUser()?.employee?.designation || ""}
                                 </p>
 
                             </div>
