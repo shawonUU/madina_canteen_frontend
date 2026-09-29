@@ -7,9 +7,9 @@ import {
   EyeOff,
   Lock,
   Mail,
-  ShieldCheck,
-  Building2,
-  CheckCircle2,
+  Sparkles,
+  Coffee,
+  Utensils,
 } from "lucide-react";
 
 type CharacterState =
@@ -80,7 +80,7 @@ export default function Login() {
       rect.left + rect.width / 2;
 
     const centerY =
-      rect.top + 125;
+      rect.top + 120;
 
     const dx = mouse.x - centerX;
     const dy = mouse.y - centerY;
@@ -88,8 +88,8 @@ export default function Login() {
     const angle = Math.atan2(dy, dx);
 
     const distance = Math.min(
-      8,
-      Math.sqrt(dx * dx + dy * dy) / 50
+      9,
+      Math.sqrt(dx * dx + dy * dy) / 45
     );
 
     return {
@@ -167,7 +167,7 @@ export default function Login() {
       setLoading(false);
 
       await new Promise((resolve) =>
-        setTimeout(resolve, 1200)
+        setTimeout(resolve, 1800)
       );
 
       navigate("/dashboard");
@@ -190,88 +190,138 @@ export default function Login() {
   const getCharacterMessage = () => {
     switch (character) {
       case "idle":
-        return "Welcome to Madina ERP";
+        return "Welcome! 👨‍🍳";
 
       case "watching":
-        return "Ready to sign in?";
+        return "Ready to sign in? 👀";
 
       case "hiding":
-        return "Your password is safe with me";
+        return "I won't peek! 🙈";
 
       case "thinking":
-        return "Verifying your credentials...";
+        return "Checking your credentials... 🤔";
 
       case "loading":
-        return "Signing you in...";
+        return "Signing you in... 🔐";
 
       case "error":
-        return "Please check your credentials";
+        return "Oops! Please check your details. 😵";
 
       case "success":
-        return "Welcome back!";
+        return "Login successful! 🎉";
 
       default:
-        return "Welcome to Madina ERP";
+        return "Welcome! 👨‍🍳";
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] relative overflow-hidden flex items-center justify-center p-4">
+    <div
+      className="
+        min-h-screen
+        bg-[#fffaf3]
+        relative
+        overflow-hidden
+        flex
+        items-center
+        justify-center
+        p-4
+      "
+    >
 
       {/* ==========================================
           BACKGROUND
       =========================================== */}
 
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+
+        {/* warm glow */}
 
         <div
           className="
             absolute
-            -top-60
-            -left-60
+            -top-52
+            -left-52
             w-[650px]
             h-[650px]
             rounded-full
-            bg-blue-200/30
-            blur-[140px]
+            bg-orange-200/40
+            blur-[130px]
           "
         />
 
         <div
           className="
             absolute
-            -bottom-60
-            -right-60
+            -bottom-52
+            -right-52
             w-[650px]
             h-[650px]
             rounded-full
-            bg-slate-300/30
-            blur-[140px]
+            bg-yellow-200/40
+            blur-[130px]
           "
         />
+
+        {/* small food bubbles */}
 
         <div
           className="
             absolute
-            top-[15%]
-            right-[8%]
-            w-2
-            h-2
-            rounded-full
-            bg-blue-400
-            animate-pulse
+            top-[12%]
+            left-[8%]
+            text-4xl
+            animate-[foodFloat_4s_ease-in-out_infinite]
           "
-        />
+        >
+          🍛
+        </div>
+
+        <div
+          className="
+            absolute
+            top-[18%]
+            right-[10%]
+            text-3xl
+            animate-[foodFloat_5s_ease-in-out_infinite_reverse]
+          "
+        >
+          ☕
+        </div>
 
         <div
           className="
             absolute
             bottom-[18%]
-            left-[7%]
-            w-3
-            h-3
+            left-[12%]
+            text-3xl
+            animate-[foodFloat_4.5s_ease-in-out_infinite]
+          "
+        >
+          🥤
+        </div>
+
+        <div
+          className="
+            absolute
+            bottom-[12%]
+            right-[15%]
+            text-4xl
+            animate-[foodFloat_5s_ease-in-out_infinite_reverse]
+          "
+        >
+          🍔
+        </div>
+
+        <div
+          className="
+            absolute
+            top-[30%]
+            left-[4%]
+            w-4
+            h-4
             rounded-full
-            bg-blue-300
+            bg-orange-400
             animate-ping
           "
         />
@@ -279,26 +329,23 @@ export default function Login() {
         <div
           className="
             absolute
-            top-[35%]
-            left-[3%]
-            w-16
-            h-16
-            border
-            border-blue-200/50
+            bottom-[30%]
+            right-[5%]
+            w-5
+            h-5
             rounded-full
+            bg-yellow-400
+            animate-bounce
           "
         />
 
-        <div
+        <Sparkles
           className="
             absolute
-            bottom-[12%]
-            right-[4%]
-            w-24
-            h-24
-            border
-            border-slate-200
-            rounded-full
+            top-[10%]
+            right-[30%]
+            text-orange-400
+            animate-pulse
           "
         />
 
@@ -313,22 +360,23 @@ export default function Login() {
         className="
           relative
           w-full
-          max-w-[1180px]
+          max-w-[1150px]
           min-h-[680px]
-          bg-white
-          rounded-[30px]
+          bg-white/90
+          backdrop-blur-3xl
+          rounded-[42px]
           border
-          border-slate-200
-          shadow-[0_30px_80px_rgba(15,23,42,0.12)]
+          border-white
+          shadow-[0_40px_100px_rgba(120,70,20,0.16)]
           overflow-hidden
           grid
           lg:grid-cols-2
-          animate-[pageEnter_0.7s_ease-out]
+          animate-[enter_0.8s_ease-out]
         "
       >
 
         {/* ========================================
-            LEFT / ERP ASSISTANT AREA
+            CANTEEN CHARACTER AREA
         ========================================= */}
 
         <div
@@ -338,57 +386,16 @@ export default function Login() {
             relative
             items-center
             justify-center
-            overflow-hidden
             bg-gradient-to-br
-            from-[#071a3d]
-            via-[#0b2a5b]
-            to-[#123b73]
+            from-[#fff3dc]
+            via-[#fffaf0]
+            to-[#ffe9d0]
+            overflow-hidden
           "
         >
 
-          {/* background grid */}
-
-          <div
-            className="
-              absolute
-              inset-0
-              opacity-[0.08]
-              bg-[linear-gradient(rgba(255,255,255,.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.7)_1px,transparent_1px)]
-              bg-[size:45px_45px]
-            "
-          />
-
-          {/* blue glow */}
-
-          <div
-            className="
-              absolute
-              top-[-120px]
-              left-[-120px]
-              w-[400px]
-              h-[400px]
-              rounded-full
-              bg-blue-400/20
-              blur-[100px]
-            "
-          />
-
-          <div
-            className="
-              absolute
-              bottom-[-150px]
-              right-[-100px]
-              w-[450px]
-              h-[450px]
-              rounded-full
-              bg-cyan-400/10
-              blur-[110px]
-            "
-          />
-
-
           {/* ======================================
-              TOP BRAND
+              CANTEEN DECORATION
           ======================================= */}
 
           <div
@@ -397,86 +404,44 @@ export default function Login() {
               top-8
               left-8
               right-8
+              h-14
+              rounded-2xl
+              bg-white/70
+              border
+              border-orange-100
               flex
               items-center
-              justify-between
-              z-30
+              justify-center
+              gap-3
+              shadow-sm
             "
           >
+            <Utensils
+              size={20}
+              className="text-orange-500"
+            />
 
-            <div className="flex items-center gap-3">
-
-              <div
-                className="
-                  w-11
-                  h-11
-                  rounded-xl
-                  bg-white/10
-                  border
-                  border-white/15
-                  backdrop-blur
-                  flex
-                  items-center
-                  justify-center
-                  shadow-lg
-                "
-              >
-                <Building2
-                  size={22}
-                  className="text-white"
-                />
-              </div>
-
-              <div>
-
-                <div
-                  className="
-                    text-white
-                    font-black
-                    text-lg
-                    tracking-tight
-                  "
-                >
-                  Madina ERP
-                </div>
-
-                <div
-                  className="
-                    text-blue-200
-                    text-[10px]
-                    uppercase
-                    tracking-[0.2em]
-                  "
-                >
-                  Enterprise Resource Planning
-                </div>
-
-              </div>
-
-            </div>
-
-
-            <div
+            <span
               className="
-                px-3
-                py-1.5
-                rounded-full
-                bg-white/10
-                border
-                border-white/10
-                text-blue-100
-                text-xs
-                font-semibold
+                text-orange-700
+                font-black
+                tracking-widest
+                uppercase
+                text-sm
               "
             >
-              Secure Access
-            </div>
+              Madina Canteen
+            </span>
 
+            <Coffee
+              size={20}
+              className="text-orange-500"
+            />
           </div>
 
 
           {/* ======================================
-              ORBITS
+              FOOD ORBITS
           ======================================= */}
 
           <div
@@ -486,50 +451,74 @@ export default function Login() {
               h-[430px]
               rounded-full
               border
-              border-white/10
-              animate-[slowSpin_35s_linear_infinite]
+              border-orange-200/60
+              animate-[spin_35s_linear_infinite]
             "
           />
 
           <div
             className="
               absolute
-              w-[330px]
-              h-[330px]
+              w-[350px]
+              h-[350px]
               rounded-full
               border
               border-dashed
-              border-blue-300/15
-              animate-[slowSpinReverse_25s_linear_infinite]
+              border-yellow-300/60
+              animate-[spin_25s_linear_infinite_reverse]
             "
           />
 
 
-          {/* orbit dots */}
+          {/* floating food */}
 
           <div
             className="
               absolute
-              w-3
-              h-3
-              rounded-full
-              bg-blue-300
-              shadow-[0_0_20px_rgba(147,197,253,.8)]
-              animate-[orbitDot_5s_linear_infinite]
+              left-[14%]
+              top-[32%]
+              text-3xl
+              animate-[foodFloat_4s_ease-in-out_infinite]
             "
-          />
+          >
+            🍚
+          </div>
 
           <div
             className="
               absolute
-              w-2
-              h-2
-              rounded-full
-              bg-cyan-300
-              shadow-[0_0_15px_rgba(103,232,249,.8)]
-              animate-[orbitDotReverse_7s_linear_infinite]
+              right-[15%]
+              top-[38%]
+              text-3xl
+              animate-[foodFloat_4.5s_ease-in-out_infinite_reverse]
             "
-          />
+          >
+            🍗
+          </div>
+
+          <div
+            className="
+              absolute
+              left-[20%]
+              bottom-[25%]
+              text-2xl
+              animate-[foodFloat_5s_ease-in-out_infinite]
+            "
+          >
+            🥘
+          </div>
+
+          <div
+            className="
+              absolute
+              right-[20%]
+              bottom-[25%]
+              text-2xl
+              animate-[foodFloat_4s_ease-in-out_infinite_reverse]
+            "
+          >
+            ☕
+          </div>
 
 
           {/* ======================================
@@ -539,24 +528,23 @@ export default function Login() {
           <div
             className={`
               absolute
-              top-28
-              right-14
-              z-40
+              top-24
+              right-16
+              z-30
               px-5
               py-3
               bg-white
               rounded-2xl
-              shadow-[0_15px_35px_rgba(0,0,0,.2)]
+              shadow-xl
               border
-              border-slate-100
-              text-slate-700
-              text-sm
-              font-semibold
+              border-orange-100
+              font-bold
+              text-gray-700
               transition-all
               duration-300
               ${
                 character === "success"
-                  ? "scale-105"
+                  ? "scale-110 rotate-2"
                   : ""
               }
             `}
@@ -574,12 +562,58 @@ export default function Login() {
                 rotate-45
               "
             />
-
           </div>
 
 
           {/* ======================================
-              3D ERP ASSISTANT
+              SUCCESS FOOD CONFETTI
+          ======================================= */}
+
+          {character === "success" && (
+            <div
+              className="
+                absolute
+                inset-0
+                pointer-events-none
+                z-40
+              "
+            >
+              {[
+                "🍚",
+                "🍛",
+                "🥤",
+                "🍗",
+                "☕",
+                "🥘",
+                "🍔",
+                "✨",
+                "⭐",
+                "🎉",
+                "🍴",
+                "❤️",
+              ].map((item, i) => (
+                <span
+                  key={i}
+                  className="
+                    absolute
+                    text-2xl
+                    animate-[foodConfetti_1.8s_ease-out_forwards]
+                  "
+                  style={{
+                    left: `${8 + i * 7}%`,
+                    top: `${5 + (i % 4) * 5}%`,
+                    animationDelay: `${i * 0.08}s`,
+                  }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          )}
+
+
+          {/* ======================================
+              CHEF CHARACTER
           ======================================= */}
 
           <div
@@ -587,63 +621,63 @@ export default function Login() {
             className={`
               relative
               w-[330px]
-              h-[455px]
+              h-[450px]
               z-20
               transition-all
               duration-500
               ${
                 character === "success"
-                  ? "animate-[assistantCelebrate_.55s_ease-in-out_infinite]"
+                  ? "animate-[chefCelebrate_0.55s_ease-in-out_infinite]"
                   : character === "error"
-                  ? "animate-[assistantShake_.35s_ease-in-out_infinite]"
+                  ? "animate-[chefShake_0.35s_ease-in-out_infinite]"
                   : character === "thinking"
-                  ? "animate-[assistantThinking_1s_ease-in-out_infinite]"
+                  ? "animate-[chefThinking_1s_ease-in-out_infinite]"
                   : character === "loading"
-                  ? "animate-[assistantLoading_.8s_ease-in-out_infinite]"
-                  : "animate-[assistantFloat_4s_ease-in-out_infinite]"
+                  ? "animate-[chefLoading_0.8s_ease-in-out_infinite]"
+                  : "animate-[chefFloat_4s_ease-in-out_infinite]"
               }
             `}
           >
 
-            {/* shadow */}
+            {/* ground shadow */}
 
             <div
               className="
                 absolute
-                bottom-0
+                bottom-1
                 left-1/2
                 -translate-x-1/2
                 w-48
-                h-7
+                h-8
                 rounded-full
-                bg-black/25
+                bg-orange-900/15
                 blur-xl
               "
             />
 
 
             {/* ==================================
-                BODY
+                BODY / UNIFORM
             ================================== */}
 
             <div
               className="
                 absolute
-                bottom-12
+                bottom-14
                 left-1/2
                 -translate-x-1/2
-                w-[225px]
+                w-[230px]
                 h-[220px]
-                rounded-[42px]
+                rounded-[35%]
                 bg-gradient-to-br
-                from-[#2563eb]
-                via-[#1d4ed8]
-                to-[#172554]
-                shadow-[inset_-20px_-20px_30px_rgba(0,0,0,.25),inset_15px_10px_25px_rgba(255,255,255,.16),0_25px_45px_rgba(0,0,0,.25)]
+                from-[#f97316]
+                via-[#ea580c]
+                to-[#9a3412]
+                shadow-[inset_-18px_-20px_30px_rgba(0,0,0,.2),inset_15px_10px_25px_rgba(255,255,255,.25),0_25px_45px_rgba(154,52,18,.25)]
               "
             >
 
-              {/* shirt center */}
+              {/* uniform center */}
 
               <div
                 className="
@@ -651,91 +685,52 @@ export default function Login() {
                   top-7
                   left-1/2
                   -translate-x-1/2
-                  w-[145px]
+                  w-[150px]
                   h-[165px]
-                  rounded-[32px]
-                  bg-slate-50
+                  rounded-[35%]
+                  bg-[#fff7ed]
                   shadow-inner
                 "
+              />
+
+              {/* buttons */}
+
+              <div
+                className="
+                  absolute
+                  top-12
+                  left-1/2
+                  -translate-x-1/2
+                  space-y-5
+                "
               >
-
-                {/* ID badge */}
-
-                <div
-                  className="
-                    absolute
-                    top-8
-                    left-1/2
-                    -translate-x-1/2
-                    w-14
-                    h-16
-                    rounded-lg
-                    bg-white
-                    border
-                    border-slate-200
-                    shadow-md
-                    flex
-                    flex-col
-                    items-center
-                    justify-center
-                  "
-                >
-
-                  <Building2
-                    size={18}
-                    className="text-blue-600"
-                  />
-
-                  <span
-                    className="
-                      text-[7px]
-                      font-black
-                      text-slate-500
-                      mt-1
-                    "
-                  >
-                    ERP
-                  </span>
-
-                </div>
-
-                {/* buttons */}
-
-                <div
-                  className="
-                    absolute
-                    top-8
-                    left-3
-                    space-y-5
-                  "
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                </div>
-
+                <div className="w-3 h-3 rounded-full bg-orange-600" />
+                <div className="w-3 h-3 rounded-full bg-orange-600" />
+                <div className="w-3 h-3 rounded-full bg-orange-600" />
               </div>
 
 
-              {/* LEFT ARM */}
+              {/* =================================
+                  LEFT ARM
+              ================================= */}
 
               <div
                 className={`
                   absolute
-                  -left-9
+                  -left-10
                   top-16
                   w-16
                   h-24
                   rounded-full
                   bg-gradient-to-br
-                  from-[#2563eb]
-                  to-[#172554]
+                  from-[#f97316]
+                  to-[#9a3412]
                   origin-top-right
                   transition-all
                   duration-500
                   ${
                     character === "hiding"
-                      ? "translate-x-9 -rotate-[55deg]"
+                      ? "translate-x-10 -rotate-[55deg]"
                       : character === "success"
                       ? "-rotate-[35deg]"
                       : ""
@@ -744,25 +739,27 @@ export default function Login() {
               />
 
 
-              {/* RIGHT ARM */}
+              {/* =================================
+                  RIGHT ARM
+              ================================= */}
 
               <div
                 className={`
                   absolute
-                  -right-9
+                  -right-10
                   top-16
                   w-16
                   h-24
                   rounded-full
                   bg-gradient-to-br
-                  from-[#2563eb]
-                  to-[#172554]
+                  from-[#f97316]
+                  to-[#9a3412]
                   origin-top-left
                   transition-all
                   duration-500
                   ${
                     character === "hiding"
-                      ? "-translate-x-9 rotate-[55deg]"
+                      ? "-translate-x-10 rotate-[55deg]"
                       : character === "success"
                       ? "rotate-[35deg]"
                       : ""
@@ -787,60 +784,88 @@ export default function Login() {
                 h-[205px]
                 rounded-[44%]
                 bg-gradient-to-br
-                from-[#ffd7b0]
-                via-[#f5b98c]
-                to-[#c97950]
-                shadow-[inset_-15px_-18px_30px_rgba(0,0,0,.16),inset_15px_10px_25px_rgba(255,255,255,.35),0_20px_35px_rgba(0,0,0,.18)]
+                from-[#fbbf8b]
+                via-[#f59e6b]
+                to-[#c2410c]
+                shadow-[inset_-15px_-18px_30px_rgba(0,0,0,.18),inset_15px_10px_25px_rgba(255,255,255,.35),0_20px_35px_rgba(154,52,18,.2)]
               "
             >
 
-              {/* hair */}
+              {/* =================================
+                  CHEF HAT
+              ================================== */}
 
               <div
                 className="
                   absolute
-                  -top-3
+                  -top-20
                   left-1/2
                   -translate-x-1/2
-                  w-[220px]
-                  h-[65px]
-                  rounded-t-[50%]
-                  bg-gradient-to-b
-                  from-[#172033]
-                  to-[#0f172a]
-                  shadow-lg
+                  w-[180px]
+                  h-[95px]
+                  bg-white
+                  rounded-t-[55%]
+                  rounded-b-[25px]
+                  shadow-[0_10px_20px_rgba(0,0,0,.12)]
                 "
-              />
+              >
 
-              {/* hair side */}
+                <div
+                  className="
+                    absolute
+                    -top-8
+                    left-5
+                    w-14
+                    h-16
+                    bg-white
+                    rounded-full
+                  "
+                />
 
-              <div
-                className="
-                  absolute
-                  top-7
-                  left-2
-                  w-9
-                  h-20
-                  rounded-full
-                  bg-[#172033]
-                "
-              />
+                <div
+                  className="
+                    absolute
+                    -top-10
+                    left-1/2
+                    -translate-x-1/2
+                    w-16
+                    h-20
+                    bg-white
+                    rounded-full
+                  "
+                />
 
-              <div
-                className="
-                  absolute
-                  top-7
-                  right-2
-                  w-9
-                  h-20
-                  rounded-full
-                  bg-[#172033]
-                "
-              />
+                <div
+                  className="
+                    absolute
+                    -top-7
+                    right-5
+                    w-14
+                    h-16
+                    bg-white
+                    rounded-full
+                  "
+                />
+
+                <div
+                  className="
+                    absolute
+                    bottom-0
+                    left-0
+                    right-0
+                    h-7
+                    bg-[#fff7ed]
+                    rounded-b-xl
+                    border-t
+                    border-orange-100
+                  "
+                />
+
+              </div>
 
 
               {/* =================================
-                  LEFT EYE
+                  EYE 1
               ================================== */}
 
               <div
@@ -865,7 +890,7 @@ export default function Login() {
                         w-6
                         h-6
                         rounded-full
-                        bg-slate-900
+                        bg-gray-900
                         transition-transform
                         duration-100
                       "
@@ -893,7 +918,9 @@ export default function Login() {
               </div>
 
 
-              {/* RIGHT EYE */}
+              {/* =================================
+                  EYE 2
+              ================================== */}
 
               <div
                 className="
@@ -917,7 +944,7 @@ export default function Login() {
                         w-6
                         h-6
                         rounded-full
-                        bg-slate-900
+                        bg-gray-900
                         transition-transform
                         duration-100
                       "
@@ -945,7 +972,9 @@ export default function Login() {
               </div>
 
 
-              {/* ERROR EYES */}
+              {/* =================================
+                  ERROR EYES
+              ================================== */}
 
               {character === "error" && (
                 <>
@@ -956,7 +985,7 @@ export default function Login() {
                       left-[43px]
                       w-11
                       h-2
-                      bg-red-600
+                      bg-red-700
                       rotate-[25deg]
                       rounded-full
                     "
@@ -969,7 +998,7 @@ export default function Login() {
                       right-[43px]
                       w-11
                       h-2
-                      bg-red-600
+                      bg-red-700
                       rotate-[-25deg]
                       rounded-full
                     "
@@ -978,7 +1007,9 @@ export default function Login() {
               )}
 
 
-              {/* SUCCESS EYES */}
+              {/* =================================
+                  SUCCESS EYES
+              ================================== */}
 
               {character === "success" && (
                 <>
@@ -990,7 +1021,7 @@ export default function Login() {
                       w-11
                       h-6
                       border-t-4
-                      border-slate-800
+                      border-gray-800
                       rounded-full
                     "
                   />
@@ -1003,7 +1034,7 @@ export default function Login() {
                       w-11
                       h-6
                       border-t-4
-                      border-slate-800
+                      border-gray-800
                       rounded-full
                     "
                   />
@@ -1011,25 +1042,9 @@ export default function Login() {
               )}
 
 
-              {/* NOSE */}
-
-              <div
-                className="
-                  absolute
-                  top-[128px]
-                  left-1/2
-                  -translate-x-1/2
-                  w-4
-                  h-6
-                  border-r-2
-                  border-b-2
-                  border-[#b56b48]
-                  rounded-br-full
-                "
-              />
-
-
-              {/* MOUTH */}
+              {/* =================================
+                  MOUTH
+              ================================== */}
 
               <div
                 className={`
@@ -1037,7 +1052,7 @@ export default function Login() {
                   bottom-7
                   left-1/2
                   -translate-x-1/2
-                  border-slate-800
+                  border-gray-800
                   transition-all
                   duration-300
                   ${
@@ -1056,13 +1071,13 @@ export default function Login() {
 
 
             {/* ==================================
-                LAPTOP / ERP DEVICE
+                FOOD TRAY
             ================================== */}
 
             <div
               className={`
                 absolute
-                bottom-[25px]
+                bottom-[28px]
                 left-1/2
                 -translate-x-1/2
                 z-30
@@ -1072,96 +1087,64 @@ export default function Login() {
                   character === "success"
                     ? "translate-y-[-15px] scale-110"
                     : character === "loading"
-                    ? "rotate-[-2deg]"
+                    ? "rotate-[-3deg]"
                     : ""
                 }
               `}
             >
 
-              {/* screen */}
+              {/* food */}
 
               <div
                 className="
-                  w-[150px]
-                  h-[92px]
-                  rounded-xl
-                  bg-slate-900
-                  border-[5px]
-                  border-slate-700
-                  shadow-2xl
-                  overflow-hidden
+                  absolute
+                  -top-11
+                  left-1/2
+                  -translate-x-1/2
+                  flex
+                  items-end
+                  gap-1
                 "
               >
+                <span className="text-3xl">
+                  🍚
+                </span>
 
-                <div
-                  className="
-                    h-full
-                    bg-gradient-to-br
-                    from-blue-50
-                    to-slate-100
-                    p-3
-                  "
-                >
+                <span className="text-2xl">
+                  🍗
+                </span>
 
-                  <div className="flex gap-1 mb-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                  </div>
-
-                  <div className="flex gap-2">
-
-                    <div
-                      className="
-                        w-7
-                        bg-blue-600/20
-                        rounded
-                        h-14
-                      "
-                    />
-
-                    <div className="flex-1 space-y-2">
-
-                      <div
-                        className="
-                          h-2
-                          w-14
-                          bg-blue-600/50
-                          rounded
-                        "
-                      />
-
-                      <div className="grid grid-cols-2 gap-1">
-
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
+                <span className="text-2xl">
+                  🥗
+                </span>
               </div>
 
-
-              {/* laptop base */}
+              {/* tray */}
 
               <div
                 className="
-                  w-[180px]
-                  h-[10px]
-                  -mt-1
-                  -ml-[15px]
-                  rounded-b-xl
+                  w-[175px]
+                  h-[25px]
+                  rounded-full
                   bg-gradient-to-b
-                  from-slate-500
-                  to-slate-700
+                  from-gray-300
+                  to-gray-500
+                  border-4
+                  border-gray-400
                   shadow-lg
+                "
+              />
+
+              <div
+                className="
+                  absolute
+                  top-[8px]
+                  left-1/2
+                  -translate-x-1/2
+                  w-[120px]
+                  h-3
+                  bg-gray-700/40
+                  rounded-full
                 "
               />
 
@@ -1171,13 +1154,13 @@ export default function Login() {
 
 
           {/* ======================================
-              FOOTER
+              CHARACTER FOOTER
           ======================================= */}
 
           <div
             className="
               absolute
-              bottom-8
+              bottom-7
               left-0
               right-0
               text-center
@@ -1185,27 +1168,29 @@ export default function Login() {
             "
           >
 
-            <div
+            <h2
               className="
-                text-white
-                font-bold
-                text-lg
+                text-xl
+                font-black
+                text-gray-800
               "
             >
               {character === "success"
-                ? "Access granted"
-                : "One platform. Complete control."}
-            </div>
+                ? "Enjoy your meal! 🍛"
+                : "Fresh food, happy people ❤️"}
+            </h2>
 
-            <div
+            <p
               className="
-                text-blue-200
-                text-xs
+                text-sm
+                text-gray-500
                 mt-1
               "
             >
-              Manage your business operations efficiently
-            </div>
+              {character === "error"
+                ? "Let's try your credentials again."
+                : "Your friendly canteen assistant is ready."}
+            </p>
 
           </div>
 
@@ -1221,17 +1206,15 @@ export default function Login() {
             flex
             items-center
             justify-center
-            p-7
-            sm:p-12
-            lg:p-16
-            bg-white
+            p-8
+            sm:p-14
           "
         >
 
           <div
             className="
               w-full
-              max-w-[400px]
+              max-w-[390px]
             "
           >
 
@@ -1241,59 +1224,47 @@ export default function Login() {
               className="
                 lg:hidden
                 flex
-                items-center
-                gap-3
-                mb-10
+                justify-center
+                mb-8
               "
             >
 
               <div
                 className="
-                  w-12
-                  h-12
-                  rounded-xl
-                  bg-[#0b2a5b]
+                  relative
+                  w-20
+                  h-20
+                  rounded-3xl
+                  bg-gradient-to-br
+                  from-orange-500
+                  to-red-500
                   flex
                   items-center
                   justify-center
-                  shadow-lg
+                  text-white
+                  text-4xl
+                  shadow-xl
                 "
               >
-                <Building2
-                  size={24}
-                  className="text-white"
-                />
-              </div>
+                👨‍🍳
 
-              <div>
-
-                <div
+                <span
                   className="
-                    text-xl
-                    font-black
-                    text-slate-900
+                    absolute
+                    -right-2
+                    -bottom-2
+                    text-2xl
                   "
                 >
-                  Madina ERP
-                </div>
-
-                <div
-                  className="
-                    text-[10px]
-                    uppercase
-                    tracking-widest
-                    text-slate-400
-                  "
-                >
-                  Enterprise Management System
-                </div>
+                  🍛
+                </span>
 
               </div>
 
             </div>
 
 
-            {/* heading */}
+            {/* title */}
 
             <div className="mb-9">
 
@@ -1305,45 +1276,46 @@ export default function Login() {
                   px-3
                   py-1.5
                   rounded-full
-                  bg-blue-50
-                  text-blue-700
+                  bg-orange-50
+                  text-orange-600
                   text-xs
                   font-bold
                   mb-4
                 "
               >
-                <ShieldCheck size={14} />
+                <Utensils size={14} />
 
-                Secure Portal
+                Canteen Portal
               </div>
 
 
               <h1
                 className="
-                  text-[36px]
-                  leading-tight
+                  text-4xl
                   font-black
-                  tracking-tight
-                  text-slate-900
+                  text-gray-900
                 "
               >
-                Welcome back
+                Welcome
+                <span
+                  className="
+                    text-orange-500
+                    ml-2
+                  "
+                >
+                  back!
+                </span>
               </h1>
 
 
               <p
                 className="
-                  text-slate-500
+                  text-gray-500
                   mt-3
-                  text-sm
-                  leading-6
                 "
               >
-                Sign in to access your
-                <span className="font-semibold text-slate-700">
-                  {" "}Madina ERP
-                </span>
-                {" "}workspace.
+                Sign in to continue to your
+                canteen dashboard.
               </p>
 
             </div>
@@ -1356,30 +1328,20 @@ export default function Login() {
                 className="
                   mb-5
                   p-4
-                  rounded-xl
+                  rounded-2xl
                   bg-red-50
                   border
                   border-red-100
-                  text-red-600
+                  text-red-500
                   text-sm
                   font-medium
-                  flex
-                  items-start
-                  gap-2
-                  animate-[assistantShake_.4s_ease-in-out]
+                  animate-[chefShake_0.4s_ease-in-out]
                 "
               >
-                <span className="text-base">
-                  !
-                </span>
-
-                <span>{error}</span>
-
+                😵 {error}
               </div>
             )}
 
-
-            {/* FORM */}
 
             <form
               onSubmit={handleSubmit}
@@ -1394,13 +1356,14 @@ export default function Login() {
                   className="
                     block
                     text-sm
-                    font-semibold
-                    text-slate-700
+                    font-bold
+                    text-gray-700
                     mb-2
                   "
                 >
                   Email address
                 </label>
+
 
                 <div className="relative">
 
@@ -1411,34 +1374,31 @@ export default function Login() {
                       left-4
                       top-1/2
                       -translate-y-1/2
-                      text-slate-400
+                      text-gray-400
                     "
                   />
 
                   <input
                     type="email"
                     required
-                    autoComplete="email"
-                    placeholder="Enter your email"
+                    placeholder="you@example.com"
                     value={form.email}
                     onChange={handleEmailChange}
                     className="
                       w-full
-                      h-[52px]
                       pl-12
                       pr-4
-                      rounded-xl
-                      bg-slate-50
+                      py-4
+                      rounded-2xl
+                      bg-gray-50
                       border
-                      border-slate-200
+                      border-gray-200
                       outline-none
-                      text-slate-800
-                      placeholder:text-slate-400
                       transition-all
                       focus:bg-white
-                      focus:border-blue-500
+                      focus:border-orange-400
                       focus:ring-4
-                      focus:ring-blue-500/10
+                      focus:ring-orange-100
                     "
                   />
 
@@ -1454,7 +1414,6 @@ export default function Login() {
                 <div
                   className="
                     flex
-                    items-center
                     justify-between
                     mb-2
                   "
@@ -1463,8 +1422,8 @@ export default function Login() {
                   <label
                     className="
                       text-sm
-                      font-semibold
-                      text-slate-700
+                      font-bold
+                      text-gray-700
                     "
                   >
                     Password
@@ -1474,9 +1433,9 @@ export default function Login() {
                     to="/forgot-password"
                     className="
                       text-xs
-                      font-semibold
-                      text-blue-600
-                      hover:text-blue-700
+                      font-bold
+                      text-orange-500
+                      hover:text-red-500
                       transition
                     "
                   >
@@ -1495,7 +1454,7 @@ export default function Login() {
                       left-4
                       top-1/2
                       -translate-y-1/2
-                      text-slate-400
+                      text-gray-400
                     "
                   />
 
@@ -1506,36 +1465,31 @@ export default function Login() {
                         : "password"
                     }
                     required
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
+                    placeholder="Your password"
                     value={form.password}
                     onFocus={handlePasswordFocus}
                     onBlur={handlePasswordBlur}
-                    onChange={(e) => {
+                    onChange={(e) =>
                       setForm({
                         ...form,
                         password: e.target.value,
-                      });
-
-                      setError("");
-                    }}
+                      })
+                    }
                     className="
                       w-full
-                      h-[52px]
                       pl-12
                       pr-12
-                      rounded-xl
-                      bg-slate-50
+                      py-4
+                      rounded-2xl
+                      bg-gray-50
                       border
-                      border-slate-200
+                      border-gray-200
                       outline-none
-                      text-slate-800
-                      placeholder:text-slate-400
                       transition-all
                       focus:bg-white
-                      focus:border-blue-500
+                      focus:border-orange-400
                       focus:ring-4
-                      focus:ring-blue-500/10
+                      focus:ring-orange-100
                     "
                   />
 
@@ -1550,15 +1504,10 @@ export default function Login() {
                       right-4
                       top-1/2
                       -translate-y-1/2
-                      text-slate-400
-                      hover:text-blue-600
+                      text-gray-400
+                      hover:text-orange-500
                       transition
                     "
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
                   >
                     {showPassword ? (
                       <EyeOff size={19} />
@@ -1572,26 +1521,6 @@ export default function Login() {
               </div>
 
 
-              {/* REMEMBER / SECURITY */}
-
-              <div
-                className="
-                  flex
-                  items-center
-                  gap-2
-                  text-xs
-                  text-slate-400
-                "
-              >
-                <ShieldCheck
-                  size={15}
-                  className="text-emerald-500"
-                />
-
-                Your account information is protected
-              </div>
-
-
               {/* LOGIN BUTTON */}
 
               <button
@@ -1601,20 +1530,18 @@ export default function Login() {
                   group
                   relative
                   w-full
-                  h-[54px]
-                  rounded-xl
-                  bg-[#0b2a5b]
+                  py-4
+                  rounded-2xl
+                  bg-gray-950
                   text-white
-                  font-bold
+                  font-black
                   overflow-hidden
-                  shadow-[0_10px_25px_rgba(11,42,91,.22)]
-                  hover:bg-[#123b73]
-                  hover:-translate-y-[1px]
-                  hover:shadow-[0_14px_30px_rgba(11,42,91,.28)]
+                  shadow-xl
+                  hover:-translate-y-1
+                  hover:shadow-2xl
                   transition-all
                   duration-300
                   disabled:opacity-60
-                  disabled:hover:translate-y-0
                 "
               >
 
@@ -1623,11 +1550,11 @@ export default function Login() {
                     absolute
                     inset-0
                     bg-gradient-to-r
-                    from-blue-600
-                    via-blue-500
-                    to-cyan-500
-                    translate-x-[-100%]
-                    group-hover:translate-x-0
+                    from-orange-500
+                    via-red-500
+                    to-yellow-500
+                    translate-y-full
+                    group-hover:translate-y-0
                     transition-transform
                     duration-500
                   "
@@ -1657,17 +1584,16 @@ export default function Login() {
                         "
                       />
 
-                      Signing in...
+                      Preparing...
                     </>
                   ) : character === "success" ? (
                     <>
-                      <CheckCircle2 size={19} />
-                      Access Granted
+                      Order Ready!
+                      🎉
                     </>
                   ) : (
                     <>
-                      Sign in to ERP
-
+                      Login
                       <ArrowRight
                         size={19}
                         className="
@@ -1684,31 +1610,53 @@ export default function Login() {
 
             </form>
 
-            {/* FOOTER */}
+
+            {/* register */}
 
             <div
               className="
-                mt-10
-                pt-5
-                border-t
-                border-slate-100
-                flex
-                items-center
-                justify-between
-                text-[11px]
-                text-slate-400
+                mt-8
+                text-center
               "
             >
 
-              <span>
-                © {new Date().getFullYear()} Madina ERP
-              </span>
+              {/* <p
+                className="
+                  text-sm
+                  text-gray-500
+                "
+              >
+                Don't have an account?
+              </p>
 
-              <span className="flex items-center gap-1">
-                <ShieldCheck size={13} />
-                Secure Login
-              </span>
+              <Link
+                to="/register"
+                className="
+                  inline-block
+                  mt-2
+                  font-black
+                  text-orange-500
+                  hover:text-red-500
+                  transition
+                "
+              >
+                Create account →
+              </Link> */}
 
+            </div>
+
+
+            {/* security */}
+
+            <div
+              className="
+                mt-8
+                text-center
+                text-xs
+                text-gray-400
+              "
+            >
+              🔒 Your information is securely encrypted
             </div>
 
           </div>
@@ -1719,18 +1667,23 @@ export default function Login() {
 
 
       {/* ============================================
-          ANIMATIONS
+          GLOBAL ANIMATIONS
       ============================================= */}
 
       <style>
         {`
 
-          @keyframes pageEnter {
+          /* ========================================
+             CARD ENTER
+          ======================================== */
+
+          @keyframes enter {
+
             from {
               opacity: 0;
               transform:
-                translateY(25px)
-                scale(.98);
+                translateY(35px)
+                scale(.96);
             }
 
             to {
@@ -1739,10 +1692,16 @@ export default function Login() {
                 translateY(0)
                 scale(1);
             }
+
           }
 
 
-          @keyframes assistantFloat {
+          /* ========================================
+             CHEF FLOAT
+          ======================================== */
+
+          @keyframes chefFloat {
+
             0%, 100% {
               transform:
                 translateY(0)
@@ -1751,13 +1710,40 @@ export default function Login() {
 
             50% {
               transform:
-                translateY(-12px)
+                translateY(-13px)
                 rotate(1deg);
             }
+
           }
 
 
-          @keyframes assistantThinking {
+          /* ========================================
+             FOOD FLOAT
+          ======================================== */
+
+          @keyframes foodFloat {
+
+            0%, 100% {
+              transform:
+                translateY(0)
+                rotate(0deg);
+            }
+
+            50% {
+              transform:
+                translateY(-18px)
+                rotate(8deg);
+            }
+
+          }
+
+
+          /* ========================================
+             THINKING
+          ======================================== */
+
+          @keyframes chefThinking {
+
             0%, 100% {
               transform:
                 translateY(0)
@@ -1769,10 +1755,16 @@ export default function Login() {
                 translateY(-7px)
                 rotate(-3deg);
             }
+
           }
 
 
-          @keyframes assistantLoading {
+          /* ========================================
+             LOADING
+          ======================================== */
+
+          @keyframes chefLoading {
+
             0%, 100% {
               transform:
                 translateY(0)
@@ -1784,10 +1776,16 @@ export default function Login() {
                 translateY(-14px)
                 scale(1.03);
             }
+
           }
 
 
-          @keyframes assistantShake {
+          /* ========================================
+             ERROR
+          ======================================== */
+
+          @keyframes chefShake {
+
             0%, 100% {
               transform:
                 translateX(0)
@@ -1796,31 +1794,37 @@ export default function Login() {
 
             20% {
               transform:
-                translateX(-9px)
+                translateX(-10px)
                 rotate(-2deg);
             }
 
             40% {
               transform:
-                translateX(9px)
+                translateX(10px)
                 rotate(2deg);
             }
 
             60% {
               transform:
-                translateX(-7px)
+                translateX(-8px)
                 rotate(-2deg);
             }
 
             80% {
               transform:
-                translateX(7px)
+                translateX(8px)
                 rotate(2deg);
             }
+
           }
 
 
-          @keyframes assistantCelebrate {
+          /* ========================================
+             SUCCESS
+          ======================================== */
+
+          @keyframes chefCelebrate {
+
             0%, 100% {
               transform:
                 translateY(0)
@@ -1830,80 +1834,56 @@ export default function Login() {
 
             25% {
               transform:
-                translateY(-20px)
-                rotate(-4deg)
-                scale(1.04);
+                translateY(-25px)
+                rotate(-5deg)
+                scale(1.05);
             }
 
             50% {
               transform:
-                translateY(-30px)
+                translateY(-35px)
                 rotate(0deg)
-                scale(1.07);
+                scale(1.08);
             }
 
             75% {
               transform:
+                translateY(-25px)
+                rotate(5deg)
+                scale(1.05);
+            }
+
+          }
+
+
+          /* ========================================
+             FOOD CONFETTI
+          ======================================== */
+
+          @keyframes foodConfetti {
+
+            0% {
+              transform:
                 translateY(-20px)
-                rotate(4deg)
-                scale(1.04);
-            }
-          }
-
-
-          @keyframes slowSpin {
-            from {
-              transform: rotate(0deg);
-            }
-
-            to {
-              transform: rotate(360deg);
-            }
-          }
-
-
-          @keyframes slowSpinReverse {
-            from {
-              transform: rotate(360deg);
-            }
-
-            to {
-              transform: rotate(0deg);
-            }
-          }
-
-
-          @keyframes orbitDot {
-            from {
-              transform:
                 rotate(0deg)
-                translateX(215px)
-                rotate(0deg);
+                scale(.5);
+
+              opacity: 0;
             }
 
-            to {
+            20% {
+              opacity: 1;
+            }
+
+            100% {
               transform:
-                rotate(360deg)
-                translateX(215px)
-                rotate(-360deg);
-            }
-          }
+                translateY(600px)
+                rotate(540deg)
+                scale(1);
 
-
-          @keyframes orbitDotReverse {
-            from {
-              transform:
-                rotate(360deg)
-                translateX(165px)
-                rotate(-360deg);
+              opacity: 0;
             }
 
-            to {
-              transform:
-                rotate(0deg)
-                translateX(165px)
-                rotate(0deg);
-            }
           }
 
         `}
@@ -1912,4 +1892,3 @@ export default function Login() {
     </div>
   );
 }
-
