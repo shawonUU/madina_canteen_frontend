@@ -7,8 +7,8 @@ import {
 
 import { useEffect, useState } from "react";
 
-import SideNav from "../../dashboard/components/side-nav";
-import TopNav from "../../dashboard/components/top-nav";
+import SideNav from "../../../components/side-nav";
+import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
 
 

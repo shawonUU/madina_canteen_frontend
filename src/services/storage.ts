@@ -24,3 +24,14 @@ export const getUser = () => {
 export const removeUser = () => {
     localStorage.removeItem("user");
 }
+
+export const setCurrentMenu = ( moduleId: number | null,  menuId: number | null, childMenuId: number | null ) => {
+    sessionStorage.setItem( "current_menu", JSON.stringify({ moduleId, menuId, childMenuId, }));
+};
+
+export const getCurrentMenu = () => {
+    const data = sessionStorage.getItem("current_menu");
+    if (!data) { return { moduleId: null,menuId: null,childMenuId: null, };}
+    try { return JSON.parse(data); } 
+    catch {return { moduleId: null, menuId: null, childMenuId: null, };}
+};

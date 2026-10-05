@@ -1,6 +1,6 @@
 import ProtectedRoute from "../../app/router/ProtectedRoute";
-import Permission from "./pages/Permission";
-import Role from "./pages/Role";
+import Permission from "../admin/pages/access-controll/Permission";
+import Role from "../admin/pages/access-controll/Role";
 
 const dashboardRoutes = [
     {

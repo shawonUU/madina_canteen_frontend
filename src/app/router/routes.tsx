@@ -1,10 +1,13 @@
-import authRoutes from "../../modules/auth/routes";
-import employeeRoutes from "../../modules/employee/routes";
-import dashboardRoutes from "../../modules/dashboard/routes";
+import authRoutes from "../../modules/admin/routes";
+import employeeRoutes from "../../modules/hrm/routes";
 import settingsRoutes from "../../modules/settings/routes";
-import mealRoutes from "../../modules/meal/routes";
+import mealRoutes from "../../modules/canteen/routes";
 import reportsRoutes from "../../modules/reports/routes";
 import RootRedirect from "./RootRedirect";
+import ProtectedRoute from "../../app/router/ProtectedRoute";
+import Dashboard from "../../pages/Dashboard";
+import Reception from "../../modules/reception/routes";
+import Approval from "../../modules/approval/routes";
 
 
 export const routes = [
@@ -13,17 +16,22 @@ export const routes = [
         path: "/",
         element: <RootRedirect />,
     },
- ...mealRoutes,
+    {
+        path: "/dashboard",
+        element: (
+            <ProtectedRoute roles={["admin", "manager"]}>
+                <Dashboard />
+            </ProtectedRoute>
+        ),
+    },
 
- ...authRoutes,
-
- ...dashboardRoutes,
- 
- ...settingsRoutes,
- 
+    ...Approval,
+    ...mealRoutes,
+    ...authRoutes,
+    ...settingsRoutes,
     ...reportsRoutes,
-
- ...employeeRoutes
+    ...employeeRoutes,
+    ...Reception,
 
 ];
 
