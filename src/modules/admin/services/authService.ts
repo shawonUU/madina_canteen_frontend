@@ -1,6 +1,6 @@
 
 import api from "../../../services/api";
-import {setToken, setUser, removeToken} from "../../../services/storage";
+import {setToken, setUser, removeToken, setUserAccess} from "../../../services/storage";
 
 import type {
     LoginPayload,
@@ -12,6 +12,7 @@ export const login = async(data:LoginPayload)=>{
     const response = await api.post<AuthResponse>("/auth/login", data);
     setToken(response.data.token);
     setUser(response.data.user);
+    setUserAccess(response.data.accesses);
     return response.data;
 };
 

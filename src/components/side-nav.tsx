@@ -1,8 +1,9 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Settings, Users, Package, ShieldCheck, UserRound, FileText, ClipboardList,  CalendarDays, BarChart3, Database, Building2, Truck, Receipt, ShoppingCart, Boxes, Folder, Circle, Utensils, ChevronRight, CircleDot} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { setCurrentMenu } from "../services/storage";
+import { userAccess } from "../hooks/userAccess";
 
 interface SidebarProps {
     openSidebar: boolean;
@@ -42,10 +43,14 @@ interface Module {
     menus: Menu[];
 }
 
-export default function SideNav({
-    openSidebar,
-    setOpenSidebar,
-}: SidebarProps) {
+export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
+
+    const {can,moduleHasAccess,menuHasAccess,childMenuHasAccess,} = userAccess();
+
+    const iconMap: Record<string, React.ElementType> = {Settings, Users,Package,ShieldCheck,UserRound,FileText,ClipboardList,CalendarDays,BarChart3,Database,Building2,Truck,Receipt,ShoppingCart,Boxes,Folder,Utensils,ChevronRight,CircleDot,};
+    const getIcon = (icon: string | null) => { return iconMap[icon ?? ""] ?? Circle;};
+    const getChildIcon = (icon: string | null) => { return iconMap[icon ?? ""] ?? CircleDot;};
+
     const navigate = useNavigate();
 
     const [modules, setModules] = useState<Module[]>([]);
@@ -169,184 +174,242 @@ export default function SideNav({
                 {/* Modules */}
                 {!loading &&
                     modules.map((module) => {
-                        const hasMenus =
-                            module.menus && module.menus.length > 0;
-
-                        const isModuleOpen =
-                            openModules[module.id] ?? false;
+                        const hasMenus =  module.menus && module.menus.length > 0;
+                        const isModuleOpen = openModules[module.id] ?? false;
 
                         return (
-                            <div
-                                key={module.id}
-                                className="mt-2"
-                            >
-                                {/* Module */}
+                            moduleHasAccess(module.id) && (
                                 <div
-                                    onClick={() => {
-                                        if (hasMenus) {
-                                            toggleModule(module.id);
-                                        } else {
-                                            handleNavigate(null);
-                                        }
-                                    }}
-                                    className="
-                                        px-4 py-3
-                                        rounded-xl
-                                        hover:bg-white/20
-                                        cursor-pointer
-                                        transition
-                                        flex
-                                        justify-between
-                                        items-center
-                                    "
+                                    key={module.id}
+                                    className="mt-2"
                                 >
-                                    <span className="font-medium">
-                                        {module.name}
-                                    </span>
+                                    {/* Module */}
+                                    <div
+                                        onClick={() => {
+                                            if (hasMenus) {
+                                                toggleModule(module.id);
+                                            } else {
+                                                handleNavigate(null);
+                                            }
+                                        }}
+                                        className="
+                                            px-4 py-3
+                                            rounded-xl
+                                            hover:bg-white/20
+                                            cursor-pointer
+                                            transition
+                                            flex
+                                            justify-between
+                                            items-center
+                                        "
+                                    >
+                                        <span className="font-medium">
+                                           {(() => {
+                                                const ModuleIcon = getIcon(module.icon);
+                                                return (
+                                                    <span className="flex items-center gap-3 font-medium">
+                                                        <ModuleIcon size={19} />
+                                                        {module.name}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </span>
 
+                                        {hasMenus && (
+                                            <ChevronDown
+                                                size={18}
+                                                className={`
+                                                    transition-transform
+                                                    duration-200
+                                                    ${
+                                                        isModuleOpen
+                                                            ? "rotate-180"
+                                                            : ""
+                                                    }
+                                                `}
+                                            />
+                                        )}
+                                    </div>
+
+                                    {/* Module Menus */}
                                     {hasMenus && (
-                                        <ChevronDown
-                                            size={18}
+                                        <div
                                             className={`
-                                                transition-transform
-                                                duration-200
+                                                ml-3
+                                                overflow-hidden
+                                                transition-all
+                                                duration-300
+                                                ease-in-out
                                                 ${
                                                     isModuleOpen
-                                                        ? "rotate-180"
-                                                        : ""
+                                                        ? "max-h-[1000px] opacity-100"
+                                                        : "max-h-0 opacity-0"
                                                 }
                                             `}
-                                        />
-                                    )}
-                                </div>
+                                        >
+                                            <div className="mt-1 space-y-1">
+                                                {module.menus
+                                                    .filter((menu) => {
+                                                        if (
+                                                            menu.child_menus &&
+                                                            menu.child_menus.length > 0
+                                                        ) {
+                                                            return menu.child_menus.some(
+                                                                (childMenu) =>
+                                                                    childMenuHasAccess(
+                                                                        menu.id,
+                                                                        childMenu.id
+                                                                    )
+                                                            );
+                                                        }
 
-                                {/* Module Menus */}
-                                {hasMenus && (
-                                    <div
-                                        className={`
-                                            ml-3
-                                            overflow-hidden
-                                            transition-all
-                                            duration-300
-                                            ease-in-out
-                                            ${
-                                                isModuleOpen
-                                                    ? "max-h-[1000px] opacity-100"
-                                                    : "max-h-0 opacity-0"
-                                            }
-                                        `}
-                                    >
-                                        <div className="mt-1 space-y-1">
-                                            {module.menus.map((menu) => {
-                                                const hasChildren =
-                                                    menu.child_menus &&
-                                                    menu.child_menus.length > 0;
+                                                        return menuHasAccess(menu.id);
+                                                    })
+                                                    .map((menu) => {
+                                                        const accessibleChildren =
+                                                            menu.child_menus?.filter(
+                                                                (childMenu) =>
+                                                                    childMenuHasAccess(
+                                                                        menu.id,
+                                                                        childMenu.id
+                                                                    )
+                                                            ) ?? [];
 
-                                                const isMenuOpen =
-                                                    openMenus[menu.id] ?? false;
+                                                        const hasChildren =
+                                                            accessibleChildren.length > 0;
 
-                                                return (
-                                                    <div
-                                                        key={menu.id}
-                                                    >
-                                                        {/* Menu */}
-                                                        <div
-                                                            onClick={() => {
-                                                                if (
-                                                                    hasChildren
-                                                                ) {
-                                                                    toggleMenu(
-                                                                        menu.id
-                                                                    );
-                                                                } else {
-                                                                    handleNavigate( '/'+module.slug+'/'+menu.slug, module.id, menu.id, null );
-                                                                }
-                                                            }}
-                                                            className="
-                                                                px-4 py-2.5
-                                                                rounded-lg
-                                                                hover:bg-white/20
-                                                                cursor-pointer
-                                                                transition
-                                                                flex
-                                                                justify-between
-                                                                items-center
-                                                            "
-                                                        >
-                                                            <span>
-                                                                {menu.name}
-                                                            </span>
+                                                        const isMenuOpen =
+                                                            openMenus[menu.id] ?? false;
 
-                                                            {hasChildren && (
-                                                                <ChevronDown
-                                                                    size={17}
-                                                                    className={`
-                                                                        transition-transform
-                                                                        duration-200
-                                                                        ${
-                                                                            isMenuOpen
-                                                                                ? "rotate-180"
-                                                                                : ""
+                                                        return (
+                                                            <div key={menu.id}>
+                                                                {/* Menu */}
+                                                                <div
+                                                                    onClick={() => {
+                                                                        if (hasChildren) {
+                                                                            toggleMenu(menu.id);
+                                                                        } else {
+                                                                            handleNavigate(
+                                                                                "/" +
+                                                                                    module.slug +
+                                                                                    "/" +
+                                                                                    menu.slug,
+                                                                                module.id,
+                                                                                menu.id,
+                                                                                null
+                                                                            );
                                                                         }
-                                                                    `}
-                                                                />
-                                                            )}
-                                                        </div>
+                                                                    }}
+                                                                    className="
+                                                                        px-4 py-2.5
+                                                                        rounded-lg
+                                                                        hover:bg-white/20
+                                                                        cursor-pointer
+                                                                        transition
+                                                                        flex
+                                                                        justify-between
+                                                                        items-center
+                                                                    "
+                                                                >
+                                                                    <span>
+                                                                        {(() => {
+                                                                            const MenuIcon = getIcon(menu.icon);
 
-                                                        {/* Child Menus */}
-                                                        {hasChildren && (
-                                                            <div
-                                                                className={`
-                                                                    ml-4
-                                                                    overflow-hidden
-                                                                    transition-all
-                                                                    duration-300
-                                                                    ease-in-out
-                                                                    ${
-                                                                        isMenuOpen
-                                                                            ? "max-h-[1000px] opacity-100"
-                                                                            : "max-h-0 opacity-0"
-                                                                    }
-                                                                `}
-                                                            >
-                                                                <div className="mt-1 space-y-1">
-                                                                    {menu.child_menus.map(
-                                                                        (
-                                                                            childMenu
-                                                                        ) => (
-                                                                            <div
-                                                                                key={
-                                                                                    childMenu.id
+                                                                            return (
+                                                                                <span className="flex items-center gap-3">
+                                                                                    <MenuIcon size={17} />
+                                                                                    {menu.name}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
+                                                                    </span>
+
+                                                                    {hasChildren && (
+                                                                        <ChevronDown
+                                                                            size={17}
+                                                                            className={`
+                                                                                transition-transform
+                                                                                duration-200
+                                                                                ${
+                                                                                    isMenuOpen
+                                                                                        ? "rotate-180"
+                                                                                        : ""
                                                                                 }
-                                                                                onClick={() =>
-                                                                                    handleNavigate( '/'+module.slug+'/'+menu.slug+'/'+childMenu.slug,  module.id, menu.id, childMenu.id )
-                                                                                }
-                                                                                className="
-                                                                                    px-4 py-2
-                                                                                    rounded-lg
-                                                                                    hover:bg-white/20
-                                                                                    cursor-pointer
-                                                                                    transition
-                                                                                    text-sm
-                                                                                "
-                                                                            >
-                                                                                {
-                                                                                    childMenu.name
-                                                                                }
-                                                                            </div>
-                                                                        )
+                                                                            `}
+                                                                        />
                                                                     )}
                                                                 </div>
+
+                                                                {/* Child Menus */}
+                                                                {hasChildren && (
+                                                                    <div
+                                                                        className={`
+                                                                            ml-4
+                                                                            overflow-hidden
+                                                                            transition-all
+                                                                            duration-300
+                                                                            ease-in-out
+                                                                            ${
+                                                                                isMenuOpen
+                                                                                    ? "max-h-[1000px] opacity-100"
+                                                                                    : "max-h-0 opacity-0"
+                                                                            }
+                                                                        `}
+                                                                    >
+                                                                        <div className="mt-1 space-y-1">
+                                                                            {accessibleChildren.map(
+                                                                                (childMenu) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            childMenu.id
+                                                                                        }
+                                                                                        onClick={() =>
+                                                                                            handleNavigate(
+                                                                                                "/" +
+                                                                                                    module.slug +
+                                                                                                    "/" +
+                                                                                                    menu.slug +
+                                                                                                    "/" +
+                                                                                                    childMenu.slug,
+                                                                                                module.id,
+                                                                                                menu.id,
+                                                                                                childMenu.id
+                                                                                            )
+                                                                                        }
+                                                                                        className="
+                                                                                            px-4 py-2
+                                                                                            rounded-lg
+                                                                                            hover:bg-white/20
+                                                                                            cursor-pointer
+                                                                                            transition
+                                                                                            text-sm
+                                                                                        "
+                                                                                    >
+                                                                                        {(() => {
+                                                                                            const ChildIcon = getChildIcon(childMenu.icon);
+                                                                                            return (
+                                                                                                <span className="flex items-center gap-3">
+                                                                                                    <ChildIcon size={15} />
+                                                                                                    {childMenu.name}
+                                                                                                </span>
+                                                                                            );
+                                                                                        })()}
+                                                                                    </div>
+                                                                                )
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                                        );
+                                                    })}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
+                            )
                         );
+
                     })}
             </nav>
         </aside>

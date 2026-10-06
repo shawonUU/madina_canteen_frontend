@@ -3,6 +3,7 @@ import AuthLayout from "../../layouts/AuthLayout";
 
 import ProtectedRoute from "../../app/router/ProtectedRoute";
 import Permission from "../admin/pages/access-controll/Permission";
+import UserAccess from "../admin/pages/access-controll/UserAccess";
 import Role from "../admin/pages/access-controll/Role";
 
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -42,6 +43,14 @@ const authRoutes = [
             {
                 path: "/admin/system-management/child-menu",
                 element: <ChildMenu />,
+            },
+            {
+                path: "/admin/access-control/user-access",
+                element: (
+                    <ProtectedRoute roles={["admin"]}>
+                        <UserAccess />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "/admin/access-control/permission",

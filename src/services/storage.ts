@@ -21,6 +21,26 @@ export const getUser = () => {
     return user ? JSON.parse(user) : null;
 }
 
+
+export const setUserAccess = (accesses: unknown) => {
+    localStorage.setItem("USER_ACCESSES",JSON.stringify(accesses));
+};
+
+export const getUserAccess = () => {
+    const accesses = localStorage.getItem("USER_ACCESSES");
+
+    if (!accesses) {
+        return [];
+    }
+
+    try {
+        return JSON.parse(accesses);
+    } catch (error) {
+        console.error("Invalid USER_ACCESSES:", error);
+        return [];
+    }
+};
+
 export const removeUser = () => {
     localStorage.removeItem("user");
 }
