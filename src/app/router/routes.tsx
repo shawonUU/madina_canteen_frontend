@@ -1,6 +1,6 @@
 import authRoutes from "../../modules/admin/routes";
 import employeeRoutes from "../../modules/hrm/routes";
-import settingsRoutes from "../../modules/settings/routes";
+// import settingsRoutes from "../../modules/settings/routes";
 import mealRoutes from "../../modules/canteen/routes";
 import reportsRoutes from "../../modules/reports/routes";
 import RootRedirect from "./RootRedirect";
@@ -8,6 +8,7 @@ import ProtectedRoute from "../../app/router/ProtectedRoute";
 import Dashboard from "../../pages/Dashboard";
 import Reception from "../../modules/reception/routes";
 import Approval from "../../modules/approval/routes";
+import meeting from "../../modules/meeting/routes";
 
 
 export const routes = [
@@ -28,10 +29,10 @@ export const routes = [
     ...Approval,
     ...mealRoutes,
     ...authRoutes,
-    ...settingsRoutes,
     ...reportsRoutes,
     ...employeeRoutes,
     ...Reception,
+    ...meeting,
 
 ];
 

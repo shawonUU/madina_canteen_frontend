@@ -1,6 +1,28 @@
-import { ChevronDown, Settings, Users, Package, ShieldCheck, UserRound, FileText, ClipboardList,  CalendarDays, BarChart3, Database, Building2, Truck, Receipt, ShoppingCart, Boxes, Folder, Circle, Utensils, ChevronRight, CircleDot} from "lucide-react";
+import {
+    ChevronDown,
+    Settings,
+    Users,
+    Package,
+    ShieldCheck,
+    UserRound,
+    FileText,
+    ClipboardList,
+    CalendarDays,
+    BarChart3,
+    Database,
+    Building2,
+    Truck,
+    Receipt,
+    ShoppingCart,
+    Boxes,
+    Folder,
+    Circle,
+    Utensils,
+    ChevronRight,
+    CircleDot,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { setCurrentMenu } from "../services/storage";
 import { userAccess } from "../hooks/userAccess";
@@ -43,52 +65,166 @@ interface Module {
     menus: Menu[];
 }
 
-export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
+let cachedModules: Module[] | null = null;
 
-    const {can,moduleHasAccess,menuHasAccess,childMenuHasAccess,} = userAccess();
-
-    const iconMap: Record<string, React.ElementType> = {Settings, Users,Package,ShieldCheck,UserRound,FileText,ClipboardList,CalendarDays,BarChart3,Database,Building2,Truck,Receipt,ShoppingCart,Boxes,Folder,Utensils,ChevronRight,CircleDot,};
-    const getIcon = (icon: string | null) => { return iconMap[icon ?? ""] ?? Circle;};
-    const getChildIcon = (icon: string | null) => { return iconMap[icon ?? ""] ?? CircleDot;};
-
+export default function SideNav({
+    openSidebar,
+    setOpenSidebar,
+}: SidebarProps) {
+    const location = useLocation();
     const navigate = useNavigate();
 
-    const [modules, setModules] = useState<Module[]>([]);
-    const [openModules, setOpenModules] = useState<Record<number, boolean>>(
-        {}
+    const {
+        moduleHasAccess,
+        menuHasAccess,
+        childMenuHasAccess,
+    } = userAccess();
+
+    const iconMap: Record<string, React.ElementType> = {
+        Settings,
+        Users,
+        Package,
+        ShieldCheck,
+        UserRound,
+        FileText,
+        ClipboardList,
+        CalendarDays,
+        BarChart3,
+        Database,
+        Building2,
+        Truck,
+        Receipt,
+        ShoppingCart,
+        Boxes,
+        Folder,
+        Utensils,
+        ChevronRight,
+        CircleDot,
+    };
+
+    const getIcon = (icon: string | null) => {
+        return iconMap[icon ?? ""] ?? Circle;
+    };
+
+    const getChildIcon = (icon: string | null) => {
+        return iconMap[icon ?? ""] ?? CircleDot;
+    };
+
+    const [modules, setModules] = useState<Module[]>(
+        () => cachedModules ?? []
     );
-    const [openMenus, setOpenMenus] = useState<Record<number, boolean>>({});
-    const [loading, setLoading] = useState(true);
+
+    const [openModules, setOpenModules] = useState<
+        Record<number, boolean>
+    >({});
+
+    const [openMenus, setOpenMenus] = useState<
+        Record<number, boolean>
+    >({});
+
+    const [loading, setLoading] = useState(
+        () => cachedModules === null
+    );
+
+    const pathSegments = location.pathname
+        .split("/")
+        .filter(Boolean);
+
+    const activeModuleSlug = pathSegments[0] ?? "";
+    const activeMenuSlug = pathSegments[1] ?? "";
+    const activeChildMenuSlug = pathSegments[2] ?? "";
+
+    const isDashboardActive =
+        location.pathname.replace(/\/+$/, "") === "/dashboard";
 
     useEffect(() => {
+        if (cachedModules !== null) {
+            setModules(cachedModules);
+            setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const fetchModules = async () => {
+            try {
+                setLoading(true);
+
+                const response = await api.get("/admin/modules", {
+                    params: {
+                        is_active: true,
+                    },
+                });
+
+                if (response.data.success) {
+                    cachedModules = response.data.data;
+
+                    if (!cancelled) {
+                        setModules(cachedModules);
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to load sidebar menus:",
+                    error
+                );
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
         fetchModules();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
-    const fetchModules = async () => {
-        try {
-            setLoading(true);
-
-            const response = await api.get("/admin/modules", {
-                params: {
-                    is_active: true,
-                },
-            });
-
-            if (response.data.success) {
-                setModules(response.data.data);
-            }
-        } catch (error) {
-            console.error("Failed to load sidebar menus:", error);
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (!modules.length) {
+            setOpenModules({});
+            setOpenMenus({});
+            return;
         }
-    };
+
+        const activeModule = modules.find(
+            (module) => module.slug === activeModuleSlug
+        );
+
+        if (!activeModule) {
+            setOpenModules({});
+            setOpenMenus({});
+            return;
+        }
+
+        const activeMenu = activeModule.menus?.find(
+            (menu) => menu.slug === activeMenuSlug
+        );
+
+        setOpenModules({
+            [activeModule.id]: true,
+        });
+
+        setOpenMenus(
+            activeMenu
+                ? { [activeMenu.id]: true }
+                : {}
+        );
+    }, [
+        location.pathname,
+        modules,
+        activeModuleSlug,
+        activeMenuSlug,
+    ]);
 
     const toggleModule = (moduleId: number) => {
         setOpenModules((prev) => ({
-            ...prev,
             [moduleId]: !prev[moduleId],
         }));
+
+        setOpenMenus({});
     };
 
     const toggleMenu = (menuId: number) => {
@@ -104,8 +240,11 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
         menuId: number | null = null,
         childMenuId: number | null = null
     ) => {
-        if (!route) {return;}
-        setCurrentMenu(moduleId,  menuId, childMenuId );
+        if (!route) {
+            return;
+        }
+
+        setCurrentMenu(moduleId, menuId, childMenuId);
         navigate(route);
         setOpenSidebar(false);
     };
@@ -118,13 +257,10 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                 bg-gradient-to-b from-indigo-700 to-purple-800
                 text-white flex flex-col p-6 pr-0 pt-0
                 transform transition-transform duration-300
-
                 ${openSidebar ? "translate-x-0" : "-translate-x-full"}
-
                 lg:translate-x-0
             `}
         >
-            {/* Mobile Close Button */}
             <button
                 onClick={() => setOpenSidebar(false)}
                 className="lg:hidden text-white text-right mr-3 text-2xl"
@@ -132,7 +268,6 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                 ✕
             </button>
 
-            {/* Logo / Title */}
             <h1 className="text-3xl font-bold mb-10 lg:mt-8">
                 Madina ERP
             </h1>
@@ -150,32 +285,37 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                     pr-3
                 "
             >
-                {/* Dashboard */}
                 <div
                     onClick={() => handleNavigate("/dashboard")}
-                    className="
+                    className={`
                         px-4 py-3
                         rounded-xl
-                        hover:bg-white/20
                         cursor-pointer
                         transition
-                    "
+                        ${
+                            isDashboardActive
+                                ? "bg-white/25 font-semibold"
+                                : "hover:bg-white/20"
+                        }
+                    `}
                 >
                     Dashboard
                 </div>
 
-                {/* Loading */}
                 {loading && (
                     <div className="px-4 py-3 text-sm text-white/70">
                         Loading menu...
                     </div>
                 )}
 
-                {/* Modules */}
                 {!loading &&
                     modules.map((module) => {
-                        const hasMenus =  module.menus && module.menus.length > 0;
-                        const isModuleOpen = openModules[module.id] ?? false;
+                        const hasMenus =
+                            module.menus &&
+                            module.menus.length > 0;
+
+                        const isModuleOpen =
+                            openModules[module.id] ?? false;
 
                         return (
                             moduleHasAccess(module.id) && (
@@ -183,7 +323,6 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                     key={module.id}
                                     className="mt-2"
                                 >
-                                    {/* Module */}
                                     <div
                                         onClick={() => {
                                             if (hasMenus) {
@@ -204,8 +343,10 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                         "
                                     >
                                         <span className="font-medium">
-                                           {(() => {
-                                                const ModuleIcon = getIcon(module.icon);
+                                            {(() => {
+                                                const ModuleIcon =
+                                                    getIcon(module.icon);
+
                                                 return (
                                                     <span className="flex items-center gap-3 font-medium">
                                                         <ModuleIcon size={19} />
@@ -231,7 +372,6 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                         )}
                                     </div>
 
-                                    {/* Module Menus */}
                                     {hasMenus && (
                                         <div
                                             className={`
@@ -263,7 +403,9 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                                             );
                                                         }
 
-                                                        return menuHasAccess(menu.id);
+                                                        return menuHasAccess(
+                                                            menu.id
+                                                        );
                                                     })
                                                     .map((menu) => {
                                                         const accessibleChildren =
@@ -281,9 +423,13 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                                         const isMenuOpen =
                                                             openMenus[menu.id] ?? false;
 
+                                                        const isActiveMenu =
+                                                            activeModuleSlug === module.slug &&
+                                                            activeMenuSlug === menu.slug &&
+                                                            !activeChildMenuSlug;
+
                                                         return (
                                                             <div key={menu.id}>
-                                                                {/* Menu */}
                                                                 <div
                                                                     onClick={() => {
                                                                         if (hasChildren) {
@@ -300,20 +446,25 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                                                             );
                                                                         }
                                                                     }}
-                                                                    className="
+                                                                    className={`
                                                                         px-4 py-2.5
                                                                         rounded-lg
-                                                                        hover:bg-white/20
                                                                         cursor-pointer
                                                                         transition
                                                                         flex
                                                                         justify-between
                                                                         items-center
-                                                                    "
+                                                                        ${
+                                                                            isActiveMenu
+                                                                                ? "bg-white/25 font-semibold"
+                                                                                : "hover:bg-white/20"
+                                                                        }
+                                                                    `}
                                                                 >
                                                                     <span>
                                                                         {(() => {
-                                                                            const MenuIcon = getIcon(menu.icon);
+                                                                            const MenuIcon =
+                                                                                getIcon(menu.icon);
 
                                                                             return (
                                                                                 <span className="flex items-center gap-3">
@@ -340,7 +491,6 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                                                     )}
                                                                 </div>
 
-                                                                {/* Child Menus */}
                                                                 {hasChildren && (
                                                                     <div
                                                                         className={`
@@ -358,44 +508,57 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                                                     >
                                                                         <div className="mt-1 space-y-1">
                                                                             {accessibleChildren.map(
-                                                                                (childMenu) => (
-                                                                                    <div
-                                                                                        key={
-                                                                                            childMenu.id
-                                                                                        }
-                                                                                        onClick={() =>
-                                                                                            handleNavigate(
-                                                                                                "/" +
-                                                                                                    module.slug +
+                                                                                (childMenu) => {
+                                                                                    const isActiveChildMenu =
+                                                                                        activeModuleSlug === module.slug &&
+                                                                                        activeMenuSlug === menu.slug &&
+                                                                                        activeChildMenuSlug === childMenu.slug;
+
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={childMenu.id}
+                                                                                            onClick={() =>
+                                                                                                handleNavigate(
                                                                                                     "/" +
-                                                                                                    menu.slug +
-                                                                                                    "/" +
-                                                                                                    childMenu.slug,
-                                                                                                module.id,
-                                                                                                menu.id,
-                                                                                                childMenu.id
-                                                                                            )
-                                                                                        }
-                                                                                        className="
-                                                                                            px-4 py-2
-                                                                                            rounded-lg
-                                                                                            hover:bg-white/20
-                                                                                            cursor-pointer
-                                                                                            transition
-                                                                                            text-sm
-                                                                                        "
-                                                                                    >
-                                                                                        {(() => {
-                                                                                            const ChildIcon = getChildIcon(childMenu.icon);
-                                                                                            return (
-                                                                                                <span className="flex items-center gap-3">
-                                                                                                    <ChildIcon size={15} />
-                                                                                                    {childMenu.name}
-                                                                                                </span>
-                                                                                            );
-                                                                                        })()}
-                                                                                    </div>
-                                                                                )
+                                                                                                        module.slug +
+                                                                                                        "/" +
+                                                                                                        menu.slug +
+                                                                                                        "/" +
+                                                                                                        childMenu.slug,
+                                                                                                    module.id,
+                                                                                                    menu.id,
+                                                                                                    childMenu.id
+                                                                                                )
+                                                                                            }
+                                                                                            className={`
+                                                                                                px-4 py-2
+                                                                                                rounded-lg
+                                                                                                cursor-pointer
+                                                                                                transition
+                                                                                                text-sm
+                                                                                                ${
+                                                                                                    isActiveChildMenu
+                                                                                                        ? "bg-white/25 font-semibold"
+                                                                                                        : "hover:bg-white/20"
+                                                                                                }
+                                                                                            `}
+                                                                                        >
+                                                                                            {(() => {
+                                                                                                const ChildIcon =
+                                                                                                    getChildIcon(
+                                                                                                        childMenu.icon
+                                                                                                    );
+
+                                                                                                return (
+                                                                                                    <span className="flex items-center gap-3">
+                                                                                                        <ChildIcon size={15} />
+                                                                                                        {childMenu.name}
+                                                                                                    </span>
+                                                                                                );
+                                                                                            })()}
+                                                                                        </div>
+                                                                                    );
+                                                                                }
                                                                             )}
                                                                         </div>
                                                                     </div>
@@ -409,7 +572,6 @@ export default function SideNav({openSidebar,setOpenSidebar,}: SidebarProps) {
                                 </div>
                             )
                         );
-
                     })}
             </nav>
         </aside>
