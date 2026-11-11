@@ -27,7 +27,7 @@ function Login() {
         e.preventDefault();
 
 
-        console.log(formData);
+        // console.log(formData);
 
 
         // Temporary redirect

@@ -16,7 +16,7 @@ export const userAccess = () => {
     const getAccesses = (): UserAccess[] => {
         const storedAccesses = localStorage.getItem("USER_ACCESSES");
 
-        console.log("USER_ACCESSES:", storedAccesses);
+        // console.log("USER_ACCESSES:", storedAccesses);
 
         if (!storedAccesses) {
             return [];
@@ -25,7 +25,7 @@ export const userAccess = () => {
         try {
             const parsed = JSON.parse(storedAccesses);
 
-            console.log("Parsed accesses:", parsed);
+            // console.log("Parsed accesses:", parsed);
 
             if (!Array.isArray(parsed)) {
                 console.error(

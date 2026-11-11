@@ -9,9 +9,29 @@ import {
     Package,
     UsersRound,
     FileDown,
+    Search,
 } from "lucide-react";
 
-import { useEffect, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type FormEvent,
+    type ReactNode,
+} from "react";
+
+import {
+    MantineReactTable,
+    useMantineReactTable,
+    type MRT_ColumnDef,
+    type MRT_ColumnFiltersState,
+    type MRT_PaginationState,
+    type MRT_SortingState,
+} from "mantine-react-table";
+
+import { ActionIcon, Tooltip } from "@mantine/core";
+import { IconFilter } from "@tabler/icons-react";
 
 import SideNav from "../../../../components/side-nav";
 import TopNav from "../../../../components/top-nav";
@@ -19,6 +39,7 @@ import api from "../../../../services/api";
 
 interface GatePassItem {
     id?: number;
+    code: string;
     product_id: number | null;
     product_name: string;
     quantity: number;
@@ -30,24 +51,30 @@ interface GatePassItem {
 
 interface GatePassData {
     id: number;
-    pass_no: string;
+    code: string;
     gate_pass_type: "Person" | "Person With Material";
-    requester?: { id: number; name: string };
+    requester?: { id: number; name: string } | null;
     department_name: string;
     designation_name: string;
     purpose: string;
     expected_exit_at: string;
     expected_return_at: string | null;
     remarks: string | null;
-    status:| "Pending"| "Approved"| "Rejected"| "Cancelled"| "Completed";
-    pending_approval?: { level: string; approver: string | null; } | null;
+    status:
+        | "Pending"
+        | "Approved"
+        | "Rejected"
+        | "Cancelled"
+        | "Completed";
+    pending_approval?: {
+        level: string;
+        approver: string | null;
+    } | null;
     items: GatePassItem[];
 }
 
 interface GatePassForm {
-    gate_pass_type:
-        | "Person"
-        | "Person With Material";
+    gate_pass_type: "Person" | "Person With Material";
     department_name: string;
     designation_name: string;
     purpose: string;
@@ -55,6 +82,18 @@ interface GatePassForm {
     expected_return_at: string;
     remarks: string;
     items: GatePassItem[];
+}
+
+interface GatePassApiResponse {
+    success: boolean;
+    data: GatePassData[];
+    meta?: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    message?: string;
 }
 
 const initialForm: GatePassForm = {
@@ -69,6 +108,7 @@ const initialForm: GatePassForm = {
 };
 
 const emptyItem: GatePassItem = {
+    code: "",
     product_id: null,
     product_name: "",
     quantity: 1,
@@ -78,186 +118,220 @@ const emptyItem: GatePassItem = {
     remarks: "",
 };
 
+const PAGE_SIZES = ["10", "25", "50", "100"];
+
+const inputClass =
+    "h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
+
+const secondaryButtonClass =
+    "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+
 export default function GatePass() {
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [gatePasses, setGatePasses] = useState<GatePassData[]>([]);
-
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [tableError, setTableError] = useState("");
+
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [lastPage, setLastPage] = useState(1);
+
+    const [globalSearch, setGlobalSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+
+    const [columnFilters, setColumnFilters] =
+        useState<MRT_ColumnFiltersState>([]);
+
+    const [sorting, setSorting] = useState<MRT_SortingState>([
+        { id: "created_at", desc: true },
+    ]);
+
+    const [pagination, setPagination] = useState<MRT_PaginationState>({
+        pageIndex: 0,
+        pageSize: 25,
+    });
+
+    const [exitFrom, setExitFrom] = useState("");
+    const [exitTo, setExitTo] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const [modalOpen, setModalOpen] = useState(false);
-    const [editingId, setEditingId] = useState<number | null>(
-        null
-    );
-
+    const [editingId, setEditingId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
-
     const [form, setForm] = useState<GatePassForm>({
         ...initialForm,
     });
 
-    const fetchGatePasses = async (
-        isRefresh = false
-    ) => {
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(globalSearch.trim());
+            setPagination((previous) => ({
+                ...previous,
+                pageIndex: 0,
+            }));
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [globalSearch]);
+
+    const filterValues = useMemo(
+        () =>
+            Object.fromEntries(
+                columnFilters
+                    .filter(
+                        (filter) =>
+                            filter.value !== undefined &&
+                            String(filter.value).trim() !== "",
+                    )
+                    .map((filter) => [
+                        String(filter.id),
+                        String(filter.value).trim(),
+                    ]),
+            ),
+        [columnFilters],
+    );
+
+    const fetchGatePasses = useCallback(async () => {
+        setLoading(true);
+        setTableError("");
+
         try {
-            if (isRefresh) {
-                setRefreshing(true);
-            } else {
-                setLoading(true);
+            const params: Record<string, string | number> = {
+                page: pagination.pageIndex + 1,
+                per_page: pagination.pageSize,
+                search: debouncedSearch,
+                sort_by: sorting[0]?.id ?? "created_at",
+                sort_dir: sorting[0]?.desc ? "desc" : "asc",
+            };
+
+            Object.entries(filterValues).forEach(([key, value]) => {
+                params[`filter[${key}]`] = value;
+            });
+
+            if (exitFrom) {
+                params["filter[exit_from]"] = exitFrom;
             }
 
-            const response = await api.get(
-                "/reception/gate-passes"
+            if (exitTo) {
+                params["filter[exit_to]"] = exitTo;
+            }
+
+            const response = await api.get<GatePassApiResponse>(
+                "/reception/gate-passes",
+                { params },
             );
 
-            if (response.data.success) {
-                setGatePasses(
-                    response.data.data
+            if (!response.data.success) {
+                throw new Error(
+                    response.data.message || "Failed to load gate passes.",
                 );
             }
+
+            const records = response.data.data ?? [];
+            const meta = response.data.meta;
+
+            setGatePasses(records);
+            setTotalRecords(meta?.total ?? records.length);
+            setLastPage(meta?.last_page ?? 1);
         } catch (error) {
-            console.error(
-                "Failed to load gate passes:",
-                error
-            );
+            console.error("Failed to load gate passes:", error);
+            setTableError("Failed to load gate passes. Please try again.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [
+        pagination.pageIndex,
+        pagination.pageSize,
+        debouncedSearch,
+        sorting,
+        filterValues,
+        exitFrom,
+        exitTo,
+    ]);
 
     useEffect(() => {
-        fetchGatePasses();
-    }, []);
+        void fetchGatePasses();
+    }, [fetchGatePasses, refreshKey]);
+
+    const refreshGatePasses = () => {
+        setRefreshing(true);
+        setRefreshKey((previous) => previous + 1);
+    };
 
     const openCreateModal = () => {
         setEditingId(null);
-
-        setForm({
-            ...initialForm,
-        });
-
+        setForm({ ...initialForm });
         setModalOpen(true);
     };
 
-    const openEditModal = (
-        gatePass: GatePassData
-    ) => {
+    const openEditModal = (gatePass: GatePassData) => {
         setEditingId(gatePass.id);
 
         setForm({
-            gate_pass_type:
-                gatePass.gate_pass_type,
-
-            department_name:
-                gatePass.department_name || "",
-
-            designation_name:
-                gatePass.designation_name || "",
-
-            purpose:
-                gatePass.purpose || "",
-
-            expected_exit_at:
-                formatDateTimeForInput(
-                    gatePass.expected_exit_at
-                ),
-
-            expected_return_at:
-                gatePass.expected_return_at
-                    ? formatDateTimeForInput(
-                          gatePass.expected_return_at
-                      )
-                    : "",
-
-            remarks:
-                gatePass.remarks || "",
-
+            gate_pass_type: gatePass.gate_pass_type,
+            department_name: gatePass.department_name || "",
+            designation_name: gatePass.designation_name || "",
+            purpose: gatePass.purpose || "",
+            expected_exit_at: formatDateTimeForInput(
+                gatePass.expected_exit_at,
+            ),
+            expected_return_at: gatePass.expected_return_at
+                ? formatDateTimeForInput(gatePass.expected_return_at)
+                : "",
+            remarks: gatePass.remarks || "",
             items:
-                gatePass.items?.map(
-                    (item) => ({
-                        id: item.id,
-
-                        product_id:
-                            item.product_id,
-
-                        product_name:
-                            item.product_name || "",
-
-                        quantity:
-                            Number(
-                                item.quantity
-                            ),
-
-                        unit:
-                            item.unit || "Pcs",
-
-                        asset_no:
-                            item.asset_no || "",
-
-                        serial_no:
-                            item.serial_no || "",
-
-                        remarks:
-                            item.remarks || "",
-                    })
-                ) || [],
+                gatePass.items?.map((item) => ({
+                    ...item,
+                    product_id: item.product_id ?? null,
+                    product_name: item.product_name || "",
+                    quantity: Number(item.quantity),
+                    unit: item.unit || "Pcs",
+                    asset_no: item.asset_no || "",
+                    serial_no: item.serial_no || "",
+                    remarks: item.remarks || "",
+                })) || [],
         });
 
         setModalOpen(true);
     };
 
     const closeModal = () => {
-        if (saving) {
-            return;
-        }
+        if (saving) return;
 
         setModalOpen(false);
         setEditingId(null);
-
-        setForm({
-            ...initialForm,
-        });
+        setForm({ ...initialForm });
     };
 
     const handleTypeChange = (
-        type:
-            | "Person"
-            | "Person With Material"
+        type: "Person" | "Person With Material",
     ) => {
-        setForm((prev) => ({
-            ...prev,
+        setForm((previous) => ({
+            ...previous,
             gate_pass_type: type,
             items:
                 type === "Person"
                     ? []
-                    : prev.items.length > 0
-                    ? prev.items
-                    : [{ ...emptyItem }],
+                    : previous.items.length
+                      ? previous.items
+                      : [{ ...emptyItem }],
         }));
     };
 
     const addItem = () => {
-        setForm((prev) => ({
-            ...prev,
-            items: [
-                ...prev.items,
-                {
-                    ...emptyItem,
-                },
-            ],
+        setForm((previous) => ({
+            ...previous,
+            items: [...previous.items, { ...emptyItem }],
         }));
     };
 
-    const removeItem = (
-        index: number
-    ) => {
-        setForm((prev) => ({
-            ...prev,
-            items: prev.items.filter(
-                (_, itemIndex) =>
-                    itemIndex !== index
+    const removeItem = (index: number) => {
+        setForm((previous) => ({
+            ...previous,
+            items: previous.items.filter(
+                (_, itemIndex) => itemIndex !== index,
             ),
         }));
     };
@@ -265,76 +339,56 @@ export default function GatePass() {
     const updateItem = (
         index: number,
         field: keyof GatePassItem,
-        value: string | number | null
+        value: string | number | null,
     ) => {
-        setForm((prev) => ({
-            ...prev,
-            items: prev.items.map(
-                (item, itemIndex) =>
-                    itemIndex === index
-                        ? {
-                              ...item,
-                              [field]: value,
-                          }
-                        : item
+        setForm((previous) => ({
+            ...previous,
+            items: previous.items.map((item, itemIndex) =>
+                itemIndex === index
+                    ? { ...item, [field]: value }
+                    : item,
             ),
         }));
     };
 
-    const handleSubmit = async (
-        e: React.FormEvent
-    ) => {
-        e.preventDefault();
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
 
         if (!form.department_name.trim()) {
-            alert(
-                "Please enter department name."
-            );
+            alert("Please enter department name.");
             return;
         }
 
         if (!form.designation_name.trim()) {
-            alert(
-                "Please enter designation name."
-            );
+            alert("Please enter designation name.");
             return;
         }
 
         if (!form.purpose.trim()) {
-            alert(
-                "Please enter purpose."
-            );
+            alert("Please enter purpose.");
             return;
         }
 
         if (!form.expected_exit_at) {
-            alert(
-                "Please select expected exit time."
-            );
+            alert("Please select expected exit time.");
             return;
         }
 
-        if (
-            form.gate_pass_type ===
-                "Person With Material"
-        ) {
+        if (form.gate_pass_type === "Person With Material") {
             if (form.items.length === 0) {
-                alert(
-                    "Please add at least one material item."
-                );
+                alert("Please add at least one material item.");
                 return;
             }
 
-            const invalidItem =
+            if (
                 form.items.some(
                     (item) =>
                         !item.product_name.trim() ||
-                        Number(item.quantity) <= 0
-                );
-
-            if (invalidItem) {
+                        Number(item.quantity) <= 0,
+                )
+            ) {
                 alert(
-                    "Please enter valid product name and quantity for all items."
+                    "Please enter valid product name and quantity for all items.",
                 );
                 return;
             }
@@ -344,126 +398,76 @@ export default function GatePass() {
 
         try {
             const data = {
-                gate_pass_type:
-                    form.gate_pass_type,
-
-                department_name:
-                    form.department_name.trim(),
-
-                designation_name:
-                    form.designation_name.trim(),
-
-                purpose:
-                    form.purpose.trim(),
-
-                expected_exit_at:
-                    form.expected_exit_at,
-
-                expected_return_at:
-                    form.expected_return_at ||
-                    null,
-
-                remarks:
-                    form.remarks.trim() ||
-                    null,
-
+                gate_pass_type: form.gate_pass_type,
+                department_name: form.department_name.trim(),
+                designation_name: form.designation_name.trim(),
+                purpose: form.purpose.trim(),
+                expected_exit_at: form.expected_exit_at,
+                expected_return_at: form.expected_return_at || null,
+                remarks: form.remarks.trim() || null,
                 items:
-                    form.gate_pass_type ===
-                    "Person"
+                    form.gate_pass_type === "Person"
                         ? []
-                        : form.items.map(
-                              (item) => ({
-                                  product_id:
-                                      item.product_id,
-
-                                  product_name:
-                                      item.product_name.trim(),
-
-                                  quantity:
-                                      Number(
-                                          item.quantity
-                                      ),
-
-                                  unit:
-                                      item.unit.trim() ||
-                                      null,
-
-                                  asset_no:
-                                      item.asset_no.trim() ||
-                                      null,
-
-                                  serial_no:
-                                      item.serial_no.trim() ||
-                                      null,
-
-                                  remarks:
-                                      item.remarks.trim() ||
-                                      null,
-                              })
-                          ),
+                        : form.items.map((item) => ({
+                              product_id: item.product_id,
+                              product_name: item.product_name.trim(),
+                              quantity: Number(item.quantity),
+                              unit: item.unit.trim() || null,
+                              asset_no: item.asset_no.trim() || null,
+                              serial_no: item.serial_no.trim() || null,
+                              remarks: item.remarks.trim() || null,
+                          })),
             };
 
             if (editingId) {
                 await api.put(
                     `/reception/gate-passes/${editingId}`,
-                    data
+                    data,
                 );
             } else {
-                await api.post(
-                    "/reception/gate-passes",
-                    data
-                );
+                await api.post("/reception/gate-passes", data);
             }
 
             setModalOpen(false);
             setEditingId(null);
-
-            setForm({
-                ...initialForm,
-            });
-
-            await fetchGatePasses(true);
+            setForm({ ...initialForm });
+            setRefreshKey((previous) => previous + 1);
         } catch (error: any) {
-            console.error(
-                "Failed to save gate pass:",
-                error
-            );
-
+            console.error("Failed to save gate pass:", error);
             alert(
                 error?.response?.data?.message ||
-                    "Failed to save gate pass."
+                    "Failed to save gate pass.",
             );
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDelete = async (
-        id: number
-    ) => {
+    const handleDelete = async (id: number) => {
         if (
             !window.confirm(
-                "Are you sure you want to delete this gate pass?"
+                "Are you sure you want to delete this gate pass?",
             )
         ) {
             return;
         }
 
         try {
-            await api.delete(
-                `/reception/gate-passes/${id}`
-            );
+            await api.delete(`/reception/gate-passes/${id}`);
 
-            await fetchGatePasses(true);
+            if (gatePasses.length === 1 && pagination.pageIndex > 0) {
+                setPagination((previous) => ({
+                    ...previous,
+                    pageIndex: previous.pageIndex - 1,
+                }));
+            } else {
+                setRefreshKey((previous) => previous + 1);
+            }
         } catch (error: any) {
-            console.error(
-                "Failed to delete gate pass:",
-                error
-            );
-
+            console.error("Failed to delete gate pass:", error);
             alert(
                 error?.response?.data?.message ||
-                    "Failed to delete gate pass."
+                    "Failed to delete gate pass.",
             );
         }
     };
@@ -472,428 +476,560 @@ export default function GatePass() {
         try {
             const response = await api.get(
                 `/reception/gate-passes/${id}/pdf`,
-                {
-                    responseType: "blob",
-                }
+                { responseType: "blob" },
             );
 
-            const blob = new Blob(
-                [response.data],
-                {
-                    type: "application/pdf",
-                }
-            );
+            const blob = new Blob([response.data], {
+                type: "application/pdf",
+            });
 
-            const url =
-                window.URL.createObjectURL(blob);
-
-            const link =
-                document.createElement("a");
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
 
             link.href = url;
-
             link.download = `gate-pass-${id}.pdf`;
 
             document.body.appendChild(link);
-
             link.click();
-
             link.remove();
 
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error(
-                "Failed to download gate pass PDF:",
-                error
-            );
-
-            alert(
-                "Failed to download gate pass PDF."
-            );
+            console.error("Failed to download gate pass PDF:", error);
+            alert("Failed to download gate pass PDF.");
         }
     };
 
+    const clearFilters = () => {
+        setGlobalSearch("");
+        setDebouncedSearch("");
+        setColumnFilters([]);
+        setExitFrom("");
+        setExitTo("");
+
+        setPagination((previous) => ({
+            ...previous,
+            pageIndex: 0,
+        }));
+    };
+
+    const hasFilters =
+        globalSearch.trim() !== "" ||
+        columnFilters.length > 0 ||
+        exitFrom !== "" ||
+        exitTo !== "";
+
+    const columns = useMemo<MRT_ColumnDef<GatePassData>[]>(
+        () => [
+            {
+                id: "serial",
+                header: "#",
+                size: 65,
+                maxSize: 65,
+                minSize: 65,
+                Header: ({ table }) => (
+                    <div className="flex items-center gap-1 whitespace-nowrap">
+                        <span>#</span>
+
+                        <Tooltip label="">
+                            <ActionIcon
+                                size="sm"
+                                variant={
+                                    table.getState().showColumnFilters
+                                        ? "filled"
+                                        : "subtle"
+                                }
+                                onClick={(event) => {
+                                    event.stopPropagation();
+
+                                    table.setShowColumnFilters(
+                                        !table.getState().showColumnFilters
+                                    );
+                                }}
+                            >
+                                <IconFilter size={14} />
+                            </ActionIcon>
+                        </Tooltip>
+                    </div>
+                ),
+                Cell: ({ row }) =>
+                    (pagination.pageIndex * pagination.pageSize) + row.index + 1,
+                enableColumnFilter: false,
+                enableSorting: false,
+            },
+            {
+                accessorKey: "code",
+                id: "code",
+                header: "Pass No",
+                minSize: 130,
+            },
+            {
+                accessorKey: "gate_pass_type",
+                id: "gate_pass_type",
+                header: "Type",
+                minSize: 160,
+                filterVariant: "select",
+                mantineFilterSelectProps: {
+                    data: [
+                        { label: "Person", value: "Person" },
+                        {
+                            label: "Person With Material",
+                            value: "Person With Material",
+                        },
+                    ],
+                    clearable: true,
+                    placeholder: "All types",
+                },
+                Cell: ({ row }) => (
+                    <TypeBadge type={row.original.gate_pass_type} />
+                ),
+            },
+            {
+                id: "requester",
+                accessorFn: (row) => row.requester?.name ?? "",
+                header: "Requested By",
+                minSize: 180,
+                Cell: ({ row }) => (
+                    <div className="min-w-[140px]">
+                        <p className="font-semibold text-slate-800">
+                            {row.original.requester?.name || "--"}
+                        </p>
+
+                        {row.original.pending_approval && (
+                            <div className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                                <p className="font-semibold">
+                                    Level - {row.original.pending_approval.level}
+                                </p>
+                                <p>
+                                    {row.original.pending_approval.approver || "--"}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                ),
+            },
+            {
+                id: "department",
+                accessorFn: (row) => row.department_name ?? "",
+                header: "Department",
+                minSize: 150,
+                Cell: ({ row }) => (
+                    <div className="min-w-[120px]">
+                        <p className="font-medium text-slate-800">
+                            {row.original.department_name || "--"}
+                        </p>
+                    </div>
+                ),
+            },
+            {
+                id: "designation",
+                accessorFn: (row) => row.designation_name ?? "",
+                header: "Designation",
+                minSize: 150,
+                Cell: ({ row }) => (
+                    <div className="min-w-[120px]">
+                        <p className="text-xs text-slate-500">
+                            {row.original.designation_name || "--"}
+                        </p>
+                    </div>
+                ),
+            },
+            {
+                accessorKey: "purpose",
+                id: "purpose",
+                header: "Purpose",
+                minSize: 180,
+                Cell: ({ row }) => (
+                    <span className="block min-w-[140px] max-w-[230px] whitespace-normal">
+                        {row.original.purpose || "--"}
+                    </span>
+                ),
+            },
+            {
+                accessorKey: "expected_exit_at",
+                id: "expected_exit_at",
+                header: "Exit Time",
+                minSize: 180,
+                enableColumnFilter: true,
+                filterVariant: "date-range",
+                Cell: ({ row }) => (
+                    <span className="whitespace-nowrap">
+                        {formatDateTime(row.original.expected_exit_at)}
+                    </span>
+                ),
+            },
+            {
+                accessorKey: "status",
+                id: "status",
+                header: "Status",
+                minSize: 130,
+                filterVariant: "select",
+                mantineFilterSelectProps: {
+                    data: [
+                        "Pending",
+                        "Approved",
+                        "Rejected",
+                        "Cancelled",
+                        "Completed",
+                    ],
+                    clearable: true,
+                    placeholder: "All statuses",
+                },
+                Cell: ({ row }) => (
+                    <StatusBadge status={row.original.status} />
+                ),
+            },
+            {
+                id: "actions",
+                header: "Actions",
+                size: 130,
+                enableSorting: false,
+                enableColumnFilter: false,
+                Cell: ({ row }) => (
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                void handleDownloadPdf(row.original.id)
+                            }
+                            title="Download PDF"
+                            className="flex h-8 w-8 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        >
+                            <FileDown size={15} />
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => openEditModal(row.original)}
+                            title="Edit"
+                            className="flex h-8 w-8 items-center justify-center rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                        >
+                            <Pencil size={15} />
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => void handleDelete(row.original.id)}
+                            title="Delete"
+                            className="flex h-8 w-8 items-center justify-center rounded border border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+                        >
+                            <Trash2 size={15} />
+                        </button>
+                    </div>
+                ),
+            },
+        ],
+        [pagination.pageIndex, pagination.pageSize],
+    );
+
+    const columnOrder = [
+        "serial",
+        "code",
+        "gate_pass_type",
+        "requester",
+        "department",
+        "designation",
+        "purpose",
+        "expected_exit_at",
+        "status",
+        "actions",
+    ];
+
+    const table = useMantineReactTable({
+        columns,
+        data: gatePasses,
+
+        manualFiltering: true,
+        manualSorting: true,
+        manualPagination: true,
+
+        rowCount: totalRecords,
+        pageCount: lastPage,
+
+        enableColumnFilters: true,
+        enableGlobalFilter: false,
+        enableColumnFilterModes: false,
+        enableColumnActions: false,
+        enableHiding: false,
+        enableDensityToggle: false,
+        enableFullScreenToggle: false,
+
+        columnFilterDisplayMode: "subheader",
+        paginationDisplayMode: "default",
+        positionPagination: "bottom",
+
+        onColumnFiltersChange: (updater) => {
+            setColumnFilters((previous) =>
+                typeof updater === "function"
+                    ? updater(previous)
+                    : updater,
+            );
+
+            setPagination((previous) => ({
+                ...previous,
+                pageIndex: 0,
+            }));
+        },
+
+        onSortingChange: (updater) => {
+            setSorting((previous) =>
+                typeof updater === "function"
+                    ? updater(previous)
+                    : updater,
+            );
+
+            setPagination((previous) => ({
+                ...previous,
+                pageIndex: 0,
+            }));
+        },
+
+        onPaginationChange: setPagination,
+
+        state: {
+            columnFilters,
+            sorting,
+            pagination,
+            columnOrder,
+            isLoading: loading,
+            showProgressBars: refreshing,
+        },
+
+        mantineTableContainerProps: {
+            style: {
+                minWidth: "100%",
+                overflowX: "auto",
+            },
+        },
+
+        mantinePaperProps: {
+            shadow: "none",
+            radius: 0,
+            style: {
+                border: 0,
+            },
+        },
+
+        mantineTableProps: {
+            striped: true,
+            highlightOnHover: true,
+            withColumnBorders: true,
+            // withTableBorder: true,
+            style: {
+                borderColor: "#cbd5e1",
+            },
+        },
+
+        mantineTableHeadCellProps: {
+            style: {
+                backgroundColor: "#f1f5f9",
+                color: "#334155",
+                fontSize: "12px",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                padding: "0px",
+                paddingLeft: "10px",
+                paddingTop: "10px",
+            },
+        },
+
+        mantineFilterTextInputProps: {
+            size: "xs",
+            variant: "default",
+            placeholder: "Search...",
+        },
+
+        mantineFilterSelectProps: {
+            size: "xs",
+            variant: "default",
+        },
+
+        mantinePaginationProps: {
+            rowsPerPageOptions: PAGE_SIZES,
+            showRowsPerPage: true,
+        },
+
+        localization: {
+            noRecordsToDisplay: "No gate passes found",
+            rowsPerPage: "Rows per page",
+        },
+    });
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-indigo-100 flex">
+        <div className="flex min-h-screen bg-slate-100">
             <SideNav
                 openSidebar={openSidebar}
-                setOpenSidebar={
-                    setOpenSidebar
-                }
+                setOpenSidebar={setOpenSidebar}
             />
 
-            <main className="flex-1 min-w-0">
+            <main className="min-w-0 flex-1">
                 <TopNav
-                    openSidebar={
-                        openSidebar
-                    }
-                    setOpenSidebar={
-                        setOpenSidebar
-                    }
+                    openSidebar={openSidebar}
+                    setOpenSidebar={setOpenSidebar}
                 />
 
-                <div className="p-4 lg:p-6 overflow-y-auto h-[calc(100vh-64px)]">
-
-                    {/* Header */}
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-7">
+                <div className="h-[calc(100vh-64px)] overflow-y-auto p-3 sm:p-4 lg:p-6">
+                    <div className="mb-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-2xl lg:text-3xl font-extrabold text-gray-800 mt-1">
-                                Gate Pass
-                            </h2>
+                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                                <ShieldCheck size={16} />
+                                <span>Reception</span>
+                                <span>/</span>
+                                <span className="font-semibold text-slate-800">
+                                    Gate Pass
+                                </span>
+                            </div>
 
-                            <p className="text-gray-500 mt-1">
-                                Manage Person and material gate pass requests.
+                            <h1 className="mt-2 text-2xl font-bold text-slate-900">
+                                Gate Pass
+                            </h1>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                                Manage and track gate pass requests.
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 type="button"
-                                onClick={() =>
-                                    fetchGatePasses(
-                                        true
-                                    )
-                                }
-                                disabled={
-                                    refreshing
-                                }
-                                className="w-10 h-10 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 hover:text-indigo-600 hover:border-indigo-200 transition disabled:opacity-50"
+                                onClick={refreshGatePasses}
+                                disabled={refreshing || loading}
+                                className={secondaryButtonClass}
                             >
                                 <RefreshCw
-                                    size={17}
-                                    className={
-                                        refreshing
-                                            ? "animate-spin"
-                                            : ""
-                                    }
+                                    size={16}
+                                    className={refreshing ? "animate-spin" : ""}
                                 />
+                                Refresh
                             </button>
 
                             <button
                                 type="button"
-                                onClick={
-                                    openCreateModal
-                                }
-                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
+                                onClick={openCreateModal}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
                             >
-                                <Plus
-                                    size={18}
-                                />
-
+                                <Plus size={17} />
                                 Add Gate Pass
                             </button>
                         </div>
                     </div>
 
-                    {/* Table */}
-                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="px-6 py-5 border-b border-gray-100">
-                            <h3 className="text-xl font-bold text-gray-800">
-                                Gate Pass List
-                            </h3>
+                    <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                        <div className="flex flex-col gap-3 border-b border-slate-300 p-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h2 className="font-bold text-slate-900">
+                                    Gate Pass List
+                                </h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    {totalRecords.toLocaleString()} total records
+                                </p>
+                            </div>
 
-                            <p className="text-sm text-gray-400 mt-1">
-                                All gate pass requests
-                            </p>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="relative sm:w-72">
+                                    <Search
+                                        size={16}
+                                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={globalSearch}
+                                        onChange={(event) =>
+                                            setGlobalSearch(event.target.value)
+                                        }
+                                        placeholder="Search all gate passes..."
+                                        className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                    />
+
+                                    {globalSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setGlobalSearch("")}
+                                            aria-label="Clear search"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-600"
+                                        >
+                                            <X size={15} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={clearFilters}
+                                    disabled={!hasFilters}
+                                    className={secondaryButtonClass}
+                                >
+                                    <X size={15} />
+                                    Clear filters
+                                </button>
+                            </div>
                         </div>
 
-                        {loading ? (
-                            <div className="py-16 text-center">
-                                <RefreshCw
-                                    size={30}
-                                    className="mx-auto animate-spin text-indigo-600"
-                                />
-
-                                <p className="mt-3 text-sm text-gray-500">
-                                    Loading gate passes...
-                                </p>
-                            </div>
-                        ) : gatePasses.length ===
-                          0 ? (
-                            <div className="py-16 text-center">
-                                <ShieldCheck
-                                    size={32}
-                                    className="mx-auto text-gray-300"
-                                />
-
-                                <p className="mt-3 font-semibold text-gray-600">
-                                    No gate passes found
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="bg-gray-50 text-left">
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                #
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Pass No
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Type
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Requested By
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Department
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Purpose
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Exit Time
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                                                Status
-                                            </th>
-
-                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">
-                                                Action
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y divide-gray-100">
-                                        {gatePasses.map(
-                                            (
-                                                gatePass,
-                                                index
-                                            ) => (
-                                                <tr
-                                                    key={
-                                                        gatePass.id
-                                                    }
-                                                    className="hover:bg-gray-50 transition"
-                                                >
-                                                    <td className="px-6 py-4 text-sm text-gray-500">
-                                                        {index +
-                                                            1}
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-sm font-semibold text-indigo-600">
-                                                            {
-                                                                gatePass.pass_no
-                                                            }
-                                                        </span>
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <TypeBadge
-                                                            type={
-                                                                gatePass.gate_pass_type
-                                                            }
-                                                        />
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-sm font-semibold text-gray-700">
-                                                            {gatePass
-                                                                .requester
-                                                                ?.name ||
-                                                                "--"}
-                                                        </span>
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-gray-700">
-                                                                {
-                                                                    gatePass.department_name
-                                                                }
-                                                            </p>
-
-                                                            <p className="text-xs text-gray-400 mt-0.5">
-                                                                {
-                                                                    gatePass.designation_name
-                                                                }
-                                                            </p>
-                                                        </div>
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-sm text-gray-600">
-                                                            {
-                                                                gatePass.purpose
-                                                            }
-                                                        </span>
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-sm text-gray-600 whitespace-nowrap">
-                                                            {formatDateTime(
-                                                                gatePass.expected_exit_at
-                                                            )}
-                                                        </span>
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <StatusBadge
-                                                            status={
-                                                                gatePass.status
-                                                            }
-                                                        />
-
-                                                        {gatePass.pending_approval && (
-                                                            <div className="text-xs text-gray-500">
-                                                                <p className="font-semibold text-gray-600">
-                                                                    Level - {gatePass.pending_approval.level}
-                                                                </p>
-
-                                                                <p>
-                                                                    {gatePass.pending_approval.approver || "--"}
-                                                                </p>
-                                                            </div>
-                                                        )}   
-
-                                                    </td>
-
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleDownloadPdf(
-                                                                        gatePass.id
-                                                                    )
-                                                                }
-                                                                className="w-9 h-9 rounded-lg bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition"
-                                                                title="Download PDF"
-                                                            >
-                                                                <FileDown size={16} />
-                                                            </button>
-
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    openEditModal(
-                                                                        gatePass
-                                                                    )
-                                                                }
-                                                                className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition"
-                                                                title="Edit"
-                                                            >
-                                                                <Pencil size={16} />
-                                                            </button>
-
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleDelete(
-                                                                        gatePass.id
-                                                                    )
-                                                                }
-                                                                className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition"
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        )}
-                                    </tbody>
-                                </table>
+                        {tableError && (
+                            <div className="flex flex-col gap-2 border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+                                <span>{tableError}</span>
+                                <button
+                                    type="button"
+                                    onClick={refreshGatePasses}
+                                    className="font-semibold underline"
+                                >
+                                    Try again
+                                </button>
                             </div>
                         )}
+
+                        <MantineReactTable table={table} />
                     </div>
                 </div>
             </main>
 
-            {/* Modal */}
             {modalOpen && (
-                <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
-                    <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-
-                        {/* Modal Header */}
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                    <ShieldCheck
-                                        size={20}
-                                        className="text-indigo-600"
-                                    />
-                                </div>
-
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-800">
-                                        {editingId
-                                            ? "Update Gate Pass"
-                                            : "Create Gate Pass"}
-                                    </h3>
-
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        {editingId
-                                            ? "Update gate pass information"
-                                            : "Create a new gate pass request"}
-                                    </p>
-                                </div>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-3 sm:p-5">
+                    <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl">
+                        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">
+                                    {editingId
+                                        ? "Update Gate Pass"
+                                        : "Create Gate Pass"}
+                                </h3>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    {editingId
+                                        ? "Update gate pass information"
+                                        : "Create a new gate pass request"}
+                                </p>
                             </div>
 
                             <button
                                 type="button"
-                                onClick={
-                                    closeModal
-                                }
-                                disabled={
-                                    saving
-                                }
-                                className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition disabled:opacity-50"
+                                onClick={closeModal}
+                                disabled={saving}
+                                aria-label="Close modal"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                             >
-                                <X
-                                    size={18}
-                                />
+                                <X size={18} />
                             </button>
                         </div>
 
                         <form
-                            onSubmit={
-                                handleSubmit
-                            }
-                            className="flex flex-col min-h-0"
+                            onSubmit={handleSubmit}
+                            className="flex min-h-0 flex-col"
                         >
-                            {/* Body */}
-                            <div className="p-6 overflow-y-auto space-y-6">
-
-                                {/* Gate Pass Type */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                            <div className="space-y-5 overflow-y-auto bg-slate-50 p-4 sm:p-5">
+                                <section className="rounded-lg border border-slate-300 bg-white p-4">
+                                    <label className="mb-3 block text-sm font-semibold text-slate-800">
                                         Gate Pass Type
-                                        <span className="text-red-500 ml-1">
-                                            *
-                                        </span>
+                                        <span className="ml-1 text-red-600">*</span>
                                     </label>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <TypeOption
-                                            active={
-                                                form.gate_pass_type ===
-                                                "Person"
-                                            }
-                                            icon={
-                                                <UserRound
-                                                    size={
-                                                        20
-                                                    }
-                                                />
-                                            }
+                                            active={form.gate_pass_type === "Person"}
+                                            icon={<UserRound size={19} />}
                                             title="Person"
                                             description="Person only"
                                             onClick={() =>
-                                                handleTypeChange(
-                                                    "Person"
-                                                )
+                                                handleTypeChange("Person")
                                             }
                                         />
 
@@ -902,547 +1038,318 @@ export default function GatePass() {
                                                 form.gate_pass_type ===
                                                 "Person With Material"
                                             }
-                                            icon={
-                                                <UsersRound
-                                                    size={
-                                                        20
-                                                    }
-                                                />
-                                            }
+                                            icon={<UsersRound size={19} />}
                                             title="Person With Material"
-                                            description="Person with material"
+                                            description="Person carrying materials or assets"
                                             onClick={() =>
                                                 handleTypeChange(
-                                                    "Person With Material"
+                                                    "Person With Material",
                                                 )
                                             }
                                         />
                                     </div>
-                                </div>
+                                </section>
 
-                                {/* Request Information */}
-                                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <UserRound
-                                            size={17}
-                                            className="text-indigo-600"
-                                        />
+                                <section className="rounded-lg border border-slate-300 bg-white p-4">
+                                    <h4 className="mb-4 border-b border-slate-200 pb-3 text-sm font-bold text-slate-900">
+                                        Request Information
+                                    </h4>
 
-                                        <h4 className="text-sm font-bold text-gray-800">
-                                            Request Information
-                                        </h4>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                                        {/* Department */}
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                Department
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
-                                            </label>
-
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <FormField label="Department" required>
                                             <input
                                                 type="text"
-                                                value={
-                                                    form.department_name
+                                                value={form.department_name}
+                                                onChange={(event) =>
+                                                    setForm((previous) => ({
+                                                        ...previous,
+                                                        department_name:
+                                                            event.target.value,
+                                                    }))
                                                 }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setForm(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            department_name:
-                                                                e
-                                                                    .target
-                                                                    .value,
-                                                        })
-                                                    )
-                                                }
-                                                placeholder="IT"
-                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                                placeholder="Enter department"
+                                                className={inputClass}
                                             />
-                                        </div>
+                                        </FormField>
 
-                                        {/* Designation */}
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                Designation
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
-                                            </label>
-
+                                        <FormField label="Designation" required>
                                             <input
                                                 type="text"
-                                                value={
-                                                    form.designation_name
+                                                value={form.designation_name}
+                                                onChange={(event) =>
+                                                    setForm((previous) => ({
+                                                        ...previous,
+                                                        designation_name:
+                                                            event.target.value,
+                                                    }))
                                                 }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setForm(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            designation_name:
-                                                                e
-                                                                    .target
-                                                                    .value,
-                                                        })
-                                                    )
-                                                }
-                                                placeholder="IT Officer"
-                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                                placeholder="Enter designation"
+                                                className={inputClass}
                                             />
-                                        </div>
+                                        </FormField>
 
-                                        {/* Purpose */}
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                Purpose
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
-                                            </label>
-
+                                        <FormField label="Purpose" required>
                                             <input
                                                 type="text"
-                                                value={
-                                                    form.purpose
+                                                value={form.purpose}
+                                                onChange={(event) =>
+                                                    setForm((previous) => ({
+                                                        ...previous,
+                                                        purpose: event.target.value,
+                                                    }))
                                                 }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setForm(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            purpose:
-                                                                e
-                                                                    .target
-                                                                    .value,
-                                                        })
-                                                    )
-                                                }
-                                                placeholder="Official Work"
-                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                                placeholder="Enter purpose"
+                                                className={inputClass}
                                             />
-                                        </div>
+                                        </FormField>
 
-                                        {/* Exit */}
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                Expected Exit
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
-                                            </label>
-
+                                        <FormField label="Expected Exit" required>
                                             <input
                                                 type="datetime-local"
-                                                value={
-                                                    form.expected_exit_at
+                                                value={form.expected_exit_at}
+                                                onChange={(event) =>
+                                                    setForm((previous) => ({
+                                                        ...previous,
+                                                        expected_exit_at:
+                                                            event.target.value,
+                                                    }))
                                                 }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setForm(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            expected_exit_at:
-                                                                e
-                                                                    .target
-                                                                    .value,
-                                                        })
-                                                    )
-                                                }
-                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                                className={inputClass}
                                             />
-                                        </div>
+                                        </FormField>
 
-                                        {/* Return */}
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                Expected Return
-                                            </label>
-
+                                        <FormField label="Expected Return">
                                             <input
                                                 type="datetime-local"
-                                                value={
-                                                    form.expected_return_at
+                                                value={form.expected_return_at}
+                                                onChange={(event) =>
+                                                    setForm((previous) => ({
+                                                        ...previous,
+                                                        expected_return_at:
+                                                            event.target.value,
+                                                    }))
                                                 }
-                                                onChange={(
-                                                    e
-                                                ) =>
-                                                    setForm(
-                                                        (
-                                                            prev
-                                                        ) => ({
-                                                            ...prev,
-                                                            expected_return_at:
-                                                                e
-                                                                    .target
-                                                                    .value,
-                                                        })
-                                                    )
-                                                }
-                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                                className={inputClass}
                                             />
-                                        </div>
+                                        </FormField>
                                     </div>
 
-                                    {/* Remarks */}
                                     <div className="mt-4">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        <label className="mb-2 block text-sm font-semibold text-slate-800">
                                             Remarks
                                         </label>
-
                                         <textarea
-                                            value={
-                                                form.remarks
-                                            }
-                                            onChange={(
-                                                e
-                                            ) =>
-                                                setForm(
-                                                    (
-                                                        prev
-                                                    ) => ({
-                                                        ...prev,
-                                                        remarks:
-                                                            e
-                                                                .target
-                                                                .value,
-                                                    })
-                                                )
+                                            value={form.remarks}
+                                            onChange={(event) =>
+                                                setForm((previous) => ({
+                                                    ...previous,
+                                                    remarks: event.target.value,
+                                                }))
                                             }
                                             rows={3}
-                                            placeholder="Additional remarks..."
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"
+                                            placeholder="Enter additional remarks..."
+                                            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                                         />
                                     </div>
-                                </div>
+                                </section>
 
-                                {/* Materials */}
-                                {form.gate_pass_type !==
-                                    "Person" && (
-                                    <div className="rounded-2xl border border-gray-100 bg-white">
-                                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Package
-                                                    size={
-                                                        17
-                                                    }
-                                                    className="text-indigo-600"
-                                                />
-
-                                                <div>
-                                                    <h4 className="text-sm font-bold text-gray-800">
-                                                        Material Items
-                                                    </h4>
-
-                                                    <p className="text-xs text-gray-400 mt-0.5">
-                                                        Products or assets being taken outside
-                                                    </p>
-                                                </div>
+                                {form.gate_pass_type ===
+                                    "Person With Material" && (
+                                    <section className="overflow-hidden rounded-lg border border-slate-300 bg-white">
+                                        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <h4 className="text-sm font-bold text-slate-900">
+                                                    Material Items
+                                                </h4>
+                                                <p className="mt-1 text-xs text-slate-500">
+                                                    Add products or assets being taken outside
+                                                </p>
                                             </div>
 
                                             <button
                                                 type="button"
-                                                onClick={
-                                                    addItem
-                                                }
-                                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition"
+                                                onClick={addItem}
+                                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700"
                                             >
-                                                <Plus
-                                                    size={
-                                                        16
-                                                    }
-                                                />
-
+                                                <Plus size={15} />
                                                 Add Item
                                             </button>
                                         </div>
 
-                                        <div className="p-5 space-y-4">
-                                            {form.items.length ===
-                                            0 ? (
-                                                <div className="py-8 text-center border border-dashed border-gray-200 rounded-xl">
+                                        <div className="space-y-4 p-4">
+                                            {form.items.length === 0 ? (
+                                                <div className="border border-dashed border-slate-300 p-6 text-center">
                                                     <Package
-                                                        size={
-                                                            28
-                                                        }
-                                                        className="mx-auto text-gray-300"
+                                                        size={25}
+                                                        className="mx-auto text-slate-400"
                                                     />
-
-                                                    <p className="mt-2 text-sm text-gray-500">
-                                                        No material items added.
+                                                    <p className="mt-2 text-sm font-semibold text-slate-700">
+                                                        No material items added
                                                     </p>
                                                 </div>
                                             ) : (
-                                                form.items.map(
-                                                    (
-                                                        item,
-                                                        index
-                                                    ) => (
-                                                        <div
-                                                            key={
-                                                                index
-                                                            }
-                                                            className="p-4 rounded-2xl border border-gray-100 bg-gray-50/60"
-                                                        >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <p className="text-sm font-bold text-gray-700">
-                                                                    Item{" "}
-                                                                    {index +
-                                                                        1}
-                                                                </p>
+                                                form.items.map((item, index) => (
+                                                    <div
+                                                        key={item.id ?? index}
+                                                        className="rounded-lg border border-slate-300 p-4"
+                                                    >
+                                                        <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2">
+                                                            <h5 className="text-sm font-bold text-slate-800">
+                                                                Item {index + 1}
+                                                            </h5>
 
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        removeItem(
-                                                                            index
-                                                                        )
-                                                                    }
-                                                                    className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition"
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeItem(index)
+                                                                }
+                                                                aria-label={`Remove item ${index + 1}`}
+                                                                className="flex h-8 w-8 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50"
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                            <div className="md:col-span-2">
+                                                                <FormField
+                                                                    label="Product / Material"
+                                                                    required
                                                                 >
-                                                                    <Trash2
-                                                                        size={
-                                                                            15
-                                                                        }
-                                                                    />
-                                                                </button>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
-                                                                {/* Product */}
-                                                                <div className="lg:col-span-2">
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Product / Material
-                                                                        <span className="text-red-500 ml-1">
-                                                                            *
-                                                                        </span>
-                                                                    </label>
-
                                                                     <input
                                                                         type="text"
-                                                                        value={
-                                                                            item.product_name
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
+                                                                        value={item.product_name}
+                                                                        onChange={(event) =>
                                                                             updateItem(
                                                                                 index,
                                                                                 "product_name",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
+                                                                                event.target.value,
                                                                             )
                                                                         }
-                                                                        placeholder="Laptop"
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                        placeholder="Enter product or material"
+                                                                        className={inputClass}
                                                                     />
-                                                                </div>
+                                                                </FormField>
+                                                            </div>
 
-                                                                {/* Quantity */}
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Quantity
-                                                                    </label>
+                                                            <FormField label="Quantity">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0.01"
+                                                                    step="0.01"
+                                                                    value={item.quantity}
+                                                                    onChange={(event) =>
+                                                                        updateItem(
+                                                                            index,
+                                                                            "quantity",
+                                                                            Number(event.target.value),
+                                                                        )
+                                                                    }
+                                                                    className={inputClass}
+                                                                />
+                                                            </FormField>
 
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0.01"
-                                                                        step="0.01"
-                                                                        value={
-                                                                            item.quantity
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            updateItem(
-                                                                                index,
-                                                                                "quantity",
-                                                                                Number(
-                                                                                    e
-                                                                                        .target
-                                                                                        .value
-                                                                                )
-                                                                            )
-                                                                        }
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                                                    />
-                                                                </div>
+                                                            <FormField label="Unit">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.unit}
+                                                                    onChange={(event) =>
+                                                                        updateItem(
+                                                                            index,
+                                                                            "unit",
+                                                                            event.target.value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Pcs"
+                                                                    className={inputClass}
+                                                                />
+                                                            </FormField>
 
-                                                                {/* Unit */}
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Unit
-                                                                    </label>
+                                                            <FormField label="Asset No">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.asset_no}
+                                                                    onChange={(event) =>
+                                                                        updateItem(
+                                                                            index,
+                                                                            "asset_no",
+                                                                            event.target.value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Asset number"
+                                                                    className={inputClass}
+                                                                />
+                                                            </FormField>
 
-                                                                    <input
-                                                                        type="text"
-                                                                        value={
-                                                                            item.unit
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            updateItem(
-                                                                                index,
-                                                                                "unit",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        placeholder="Pcs"
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                                                    />
-                                                                </div>
+                                                            <FormField label="Serial No">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.serial_no}
+                                                                    onChange={(event) =>
+                                                                        updateItem(
+                                                                            index,
+                                                                            "serial_no",
+                                                                            event.target.value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Serial number"
+                                                                    className={inputClass}
+                                                                />
+                                                            </FormField>
 
-                                                                {/* Asset */}
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Asset No
-                                                                    </label>
-
-                                                                    <input
-                                                                        type="text"
-                                                                        value={
-                                                                            item.asset_no
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            updateItem(
-                                                                                index,
-                                                                                "asset_no",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        placeholder="IT-LAP-025"
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                                                    />
-                                                                </div>
-
-                                                                {/* Serial */}
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Serial No
-                                                                    </label>
-
+                                                            <div className="md:col-span-2 lg:col-span-3">
+                                                                <FormField label="Item Remarks">
                                                                     <input
                                                                         type="text"
-                                                                        value={
-                                                                            item.serial_no
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            updateItem(
-                                                                                index,
-                                                                                "serial_no",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        placeholder="Serial number"
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                                                    />
-                                                                </div>
-
-                                                                {/* Item Remarks */}
-                                                                <div className="md:col-span-2 lg:col-span-3">
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Item Remarks
-                                                                    </label>
-
-                                                                    <input
-                                                                        type="text"
-                                                                        value={
-                                                                            item.remarks
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
+                                                                        value={item.remarks}
+                                                                        onChange={(event) =>
                                                                             updateItem(
                                                                                 index,
                                                                                 "remarks",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
+                                                                                event.target.value,
                                                                             )
                                                                         }
-                                                                        placeholder="Item remarks"
-                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                        placeholder="Optional remarks"
+                                                                        className={inputClass}
                                                                     />
-                                                                </div>
+                                                                </FormField>
                                                             </div>
                                                         </div>
-                                                    )
-                                                )
+                                                    </div>
+                                                ))
                                             )}
                                         </div>
-                                    </div>
+                                    </section>
                                 )}
                             </div>
 
-                            {/* Footer */}
-                            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 shrink-0">
+                            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-white px-5 py-4">
                                 <button
                                     type="button"
-                                    onClick={
-                                        closeModal
-                                    }
-                                    disabled={
-                                        saving
-                                    }
-                                    className="px-5 h-11 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-100 transition disabled:opacity-50"
+                                    onClick={closeModal}
+                                    disabled={saving}
+                                    className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
 
                                 <button
                                     type="submit"
-                                    disabled={
-                                        saving
-                                    }
-                                    className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm transition disabled:opacity-60"
+                                    disabled={saving}
+                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     {saving ? (
                                         <>
                                             <RefreshCw
-                                                size={
-                                                    16
-                                                }
+                                                size={15}
                                                 className="animate-spin"
                                             />
-
                                             Saving...
                                         </>
+                                    ) : editingId ? (
+                                        "Update Gate Pass"
                                     ) : (
-                                        <>
-                                            {editingId
-                                                ? "Update"
-                                                : "Create"}
-                                        </>
+                                        "Create Gate Pass"
                                     )}
                                 </button>
                             </div>
@@ -1450,6 +1357,26 @@ export default function GatePass() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function FormField({
+    label,
+    required = false,
+    children,
+}: {
+    label: string;
+    required?: boolean;
+    children: ReactNode;
+}) {
+    return (
+        <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-800">
+                {label}
+                {required && <span className="ml-1 text-red-600">*</span>}
+            </label>
+            {children}
         </div>
     );
 }
@@ -1462,7 +1389,7 @@ function TypeOption({
     onClick,
 }: {
     active: boolean;
-    icon: React.ReactNode;
+    icon: ReactNode;
     title: string;
     description: string;
     onClick: () => void;
@@ -1471,35 +1398,28 @@ function TypeOption({
         <button
             type="button"
             onClick={onClick}
-            className={`text-left p-4 rounded-2xl border transition ${
+            className={`rounded-lg border p-4 text-left transition ${
                 active
                     ? "border-indigo-500 bg-indigo-50"
-                    : "border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/40"
+                    : "border-slate-300 bg-white hover:bg-slate-50"
             }`}
         >
             <div className="flex items-center gap-3">
                 <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                         active
                             ? "bg-indigo-600 text-white"
-                            : "bg-gray-100 text-gray-500"
+                            : "bg-slate-100 text-slate-600"
                     }`}
                 >
                     {icon}
                 </div>
 
                 <div>
-                    <p
-                        className={`text-sm font-bold ${
-                            active
-                                ? "text-indigo-700"
-                                : "text-gray-700"
-                        }`}
-                    >
+                    <p className="text-sm font-semibold text-slate-800">
                         {title}
                     </p>
-
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="mt-1 text-xs text-slate-500">
                         {description}
                     </p>
                 </div>
@@ -1511,21 +1431,15 @@ function TypeOption({
 function TypeBadge({
     type,
 }: {
-    type:
-        | "Person"
-        | "Person With Material";
+    type: "Person" | "Person With Material";
 }) {
-    if (type === "Person") {
-        return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-semibold">
-                <UserRound size={13} />
-                Person
-            </span>
-        );
-    }
-
-    return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-xs font-semibold">
+    return type === "Person" ? (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800">
+            <UserRound size={13} />
+            Person
+        </span>
+    ) : (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-800">
             <UsersRound size={13} />
             Person + Material
         </span>
@@ -1542,80 +1456,43 @@ function StatusBadge({
         | "Cancelled"
         | "Completed";
 }) {
-    const config = {
-        Pending: {
-            label: "Pending",
-            className:
-                "bg-yellow-50 text-yellow-700 border-yellow-100",
-        },
-
-        Approved: {
-            label: "Approved",
-            className:
-                "bg-green-50 text-green-700 border-green-100",
-        },
-
-        Rejected: {
-            label: "Rejected",
-            className:
-                "bg-red-50 text-red-700 border-red-100",
-        },
-
-        Cancelled: {
-            label: "Cancelled",
-            className:
-                "bg-gray-50 text-gray-600 border-gray-200",
-        },
-
-        Completed: {
-            label: "Completed",
-            className:
-                "bg-blue-50 text-blue-700 border-blue-100",
-        },
+    const classNames: Record<string, string> = {
+        Pending: "border-amber-200 bg-amber-50 text-amber-800",
+        Approved: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        Rejected: "border-red-200 bg-red-50 text-red-800",
+        Cancelled: "border-slate-300 bg-slate-100 text-slate-700",
+        Completed: "border-blue-200 bg-blue-50 text-blue-800",
     };
-
-    const item = config[status];
 
     return (
         <span
-            className={`inline-flex items-center px-3 py-1 rounded-full border text-xs font-semibold ${item.className}`}
+            className={`inline-flex whitespace-nowrap rounded border px-2 py-1 text-xs font-semibold ${
+                classNames[status] ?? classNames.Pending
+            }`}
         >
-            {item.label}
+            {status}
         </span>
     );
 }
 
-function formatDateTime(
-    value: string
-) {
-    if (!value) {
-        return "--";
-    }
+function formatDateTime(value: string | null | undefined) {
+    if (!value) return "--";
 
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
+    if (Number.isNaN(date.getTime())) return value;
 
-    return date.toLocaleString(
-        "en-GB",
-        {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        }
-    );
+    return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
-function formatDateTimeForInput(
-    value: string
-) {
-    if (!value) {
-        return "";
-    }
+function formatDateTimeForInput(value: string | null | undefined) {
+    if (!value) return "";
 
     const date = new Date(value);
 
@@ -1623,24 +1500,11 @@ function formatDateTimeForInput(
         return value.slice(0, 16);
     }
 
-    const year =
-        date.getFullYear();
-
-    const month = String(
-        date.getMonth() + 1
-    ).padStart(2, "0");
-
-    const day = String(
-        date.getDate()
-    ).padStart(2, "0");
-
-    const hours = String(
-        date.getHours()
-    ).padStart(2, "0");
-
-    const minutes = String(
-        date.getMinutes()
-    ).padStart(2, "0");
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
 
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

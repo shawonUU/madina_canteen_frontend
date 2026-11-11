@@ -9,6 +9,7 @@ import Dashboard from "../../pages/Dashboard";
 import Reception from "../../modules/reception/routes";
 import Approval from "../../modules/approval/routes";
 import meeting from "../../modules/meeting/routes";
+import support from "../../modules/support/routes";
 
 
 export const routes = [
@@ -33,6 +34,7 @@ export const routes = [
     ...employeeRoutes,
     ...Reception,
     ...meeting,
+    ...support,
 
 ];
 

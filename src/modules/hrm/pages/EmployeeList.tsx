@@ -205,7 +205,7 @@ export default function EmployeeList() {
     try {
       setLoading(true);
 
-      const response = await api.get("/employees", {
+      const response = await api.get("/hrm/employees", {
         params: {
           page,
           per_page: 15,
@@ -412,12 +412,12 @@ export default function EmployeeList() {
 
       if (editId !== null) {
         await api.put(
-          `/employees/${editId}`,
+          `/hrm/employees/${editId}`,
           payload
         );
       } else {
         await api.post(
-          "/employees",
+          "/hrm/employees",
           payload
         );
       }
@@ -465,7 +465,7 @@ export default function EmployeeList() {
       setDeletingId(employee.id);
 
       await api.delete(
-        `/employees/${employee.id}`
+        `/hrm/employees/${employee.id}`
       );
 
       const nextPage =

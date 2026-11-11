@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+button[aria-label="Show/Hide filters"] {
+    display: none !important;
+}
+.mantine-kq5u63{
+    display: none !important;
+}
+
+.mantine-Table-root .mantine-TextInput-input,
+.mantine-Table-root .mantine-Select-input,
+.mantine-Table-root .mantine-DatePickerInput-input {
+    border: 1px solid #000 !important;
+}
+
+.mantine-DateRangePickerInput-input,
+.mantine-DateRangePickerInput-inputField,
+.mantine-DatePickerInput-input,
+.mantine-DateInput-input,
+.mantine-Input-input {
+    border: 1px solid #000 !important;
+    border-radius: 10px !important;
+    height: 30px !important;
+    padding-left:5px !important;
+    padding-right:5px !important;
+}

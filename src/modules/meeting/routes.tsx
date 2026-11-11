@@ -6,6 +6,7 @@ import MeetingCalendar from "./pages/meetingCalendar";
 import MeetingInvitations from "./pages/MeetingInvitations";
 import MeetingAgenda from "./pages/MeetingAgenda";
 import MeetingAttendance from "./pages/MeetingAttendance";
+import MeetingMinutes from "./pages/MeetingMinutes";
 
 const meetingManagementRoutes = [
     { path: "/meeting/meeting-scheduling/meeting-list", element: <MeetingList /> },
@@ -17,6 +18,7 @@ const meetingManagementRoutes = [
     { path: "/meeting/invitations", element: <MeetingInvitations />, },
     { path: "/meeting/meeting-agenda", element: <MeetingAgenda />, },
     { path: "/meeting/meeting-attendance", element: <MeetingAttendance />, },
+    { path: "/meeting/meeting-minutes", element: <MeetingMinutes />, },
 
     
 ];
