@@ -30,11 +30,6 @@ interface ChildMenuData {
     name: string;
 }
 
-interface RoleData {
-    id: number;
-    name: string;
-}
-
 interface UserData {
     id: number;
     name: string;
@@ -50,8 +45,7 @@ interface WorkflowLevel {
     id?: number;
     level_no: number;
     name: string;
-    approver_type: "Role" | "User" | "Department Role";
-    role_id: number | null;
+    approver_type: "User" | "Department";
     user_id: number | null;
     department_id: number | null;
     min_approvers: number;
@@ -89,8 +83,7 @@ interface WorkflowForm {
 const createLevel = (levelNo: number): WorkflowLevel => ({
     level_no: levelNo,
     name: "",
-    approver_type: "Role",
-    role_id: null,
+    approver_type: "User",
     user_id: null,
     department_id: null,
     min_approvers: 1,
@@ -120,7 +113,6 @@ export default function ApprovalWorkflow() {
     const [menus, setMenus] = useState<MenuData[]>([]);
     const [childMenus, setChildMenus] = useState<ChildMenuData[]>([]);
 
-    const [roles, setRoles] = useState<RoleData[]>([]);
     const [users, setUsers] = useState<UserData[]>([]);
     const [departments, setDepartments] = useState<DepartmentData[]>(
         []
@@ -180,20 +172,7 @@ export default function ApprovalWorkflow() {
         }
     };
 
-    const fetchRoles = async () => {
-        try {
-            const response = await api.get("/admin/roles");
 
-            if (response.data.success) {
-                setRoles(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load roles:",
-                error
-            );
-        }
-    };
 
     const fetchUsers = async () => {
         try {
@@ -266,9 +245,9 @@ export default function ApprovalWorkflow() {
     useEffect(() => {
         fetchWorkflows();
         fetchModules();
-        fetchRoles();
+        // fetchRoles();
         fetchUsers();
-        fetchDepartments();
+        // fetchDepartments();
     }, []);
 
     const openCreateModal = () => {
@@ -314,8 +293,6 @@ export default function ApprovalWorkflow() {
                           ...level,
                           level_no:
                               level.level_no || index + 1,
-                          role_id:
-                              level.role_id || null,
                           user_id:
                               level.user_id || null,
                           department_id:
@@ -455,7 +432,6 @@ export default function ApprovalWorkflow() {
                 return {
                     ...level,
                     approver_type: type,
-                    role_id: null,
                     user_id: null,
                     department_id: null,
                 };
@@ -492,16 +468,6 @@ export default function ApprovalWorkflow() {
             }
 
             if (
-                level.approver_type === "Role" &&
-                !level.role_id
-            ) {
-                alert(
-                    `Please select role for level ${level.level_no}.`
-                );
-                return;
-            }
-
-            if (
                 level.approver_type === "User" &&
                 !level.user_id
             ) {
@@ -512,7 +478,7 @@ export default function ApprovalWorkflow() {
             }
 
             if (
-                level.approver_type === "Department Role" &&
+                level.approver_type === "Department" &&
                 !level.department_id
             ) {
                 alert(
@@ -538,17 +504,13 @@ export default function ApprovalWorkflow() {
                     name: level.name.trim(),
                     approver_type:
                         level.approver_type,
-                    role_id:
-                        level.approver_type === "Role"
-                            ? level.role_id
-                            : null,
                     user_id:
                         level.approver_type === "User"
                             ? level.user_id
                             : null,
                     department_id:
                         level.approver_type ===
-                        "Department Role"
+                        "Department"
                             ? level.department_id
                             : null,
                     min_approvers:
@@ -1300,16 +1262,13 @@ export default function ApprovalWorkflow() {
                                                                 }
                                                                 className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                                                             >
-                                                                <option value="Role">
-                                                                    Role
-                                                                </option>
 
                                                                 <option value="User">
                                                                     User
                                                                 </option>
 
-                                                                <option value="Department Role">
-                                                                    Department Role
+                                                                <option value="Department">
+                                                                    Department
                                                                 </option>
                                                             </select>
                                                         </div>
@@ -1347,66 +1306,7 @@ export default function ApprovalWorkflow() {
                                                     {/* Approver Selection */}
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
 
-                                                        {level.approver_type ===
-                                                            "Role" && (
-                                                            <div>
-                                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                                    Role
-                                                                    <span className="text-red-500 ml-1">
-                                                                        *
-                                                                    </span>
-                                                                </label>
-
-                                                                <select
-                                                                    value={
-                                                                        level.role_id ||
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e
-                                                                    ) =>
-                                                                        updateLevel(
-                                                                            index,
-                                                                            "role_id",
-                                                                            e
-                                                                                .target
-                                                                                .value
-                                                                                ? Number(
-                                                                                      e
-                                                                                          .target
-                                                                                          .value
-                                                                                  )
-                                                                                : null
-                                                                        )
-                                                                    }
-                                                                    className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                                                                >
-                                                                    <option value="">
-                                                                        Select Role
-                                                                    </option>
-
-                                                                    {roles.map(
-                                                                        (
-                                                                            role
-                                                                        ) => (
-                                                                            <option
-                                                                                key={
-                                                                                    role.id
-                                                                                }
-                                                                                value={
-                                                                                    role.id
-                                                                                }
-                                                                            >
-                                                                                {
-                                                                                    role.name
-                                                                                }
-                                                                            </option>
-                                                                        )
-                                                                    )}
-                                                                </select>
-                                                            </div>
-                                                        )}
-
+                                                      
                                                         {level.approver_type ===
                                                             "User" && (
                                                             <div>
@@ -1468,7 +1368,7 @@ export default function ApprovalWorkflow() {
                                                         )}
 
                                                         {level.approver_type ===
-                                                            "Department Role" && (
+                                                            "Department" && (
                                                             <>
                                                                 <div>
                                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1527,59 +1427,6 @@ export default function ApprovalWorkflow() {
                                                                     </select>
                                                                 </div>
 
-                                                                <div>
-                                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                                        Role
-                                                                    </label>
-
-                                                                    <select
-                                                                        value={
-                                                                            level.role_id ||
-                                                                            ""
-                                                                        }
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            updateLevel(
-                                                                                index,
-                                                                                "role_id",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                                    ? Number(
-                                                                                          e
-                                                                                              .target
-                                                                                              .value
-                                                                                      )
-                                                                                    : null
-                                                                            )
-                                                                        }
-                                                                        className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                                                                    >
-                                                                        <option value="">
-                                                                            Select Role
-                                                                        </option>
-
-                                                                        {roles.map(
-                                                                            (
-                                                                                role
-                                                                            ) => (
-                                                                                <option
-                                                                                    key={
-                                                                                        role.id
-                                                                                    }
-                                                                                    value={
-                                                                                        role.id
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        role.name
-                                                                                    }
-                                                                                </option>
-                                                                            )
-                                                                        )}
-                                                                    </select>
-                                                                </div>
                                                             </>
                                                         )}
                                                     </div>

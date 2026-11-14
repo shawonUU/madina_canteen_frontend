@@ -9,6 +9,7 @@ import AssignedTickets from "./pages/AssignedTickets";
 import AllTickets from "./pages/AllTickets";
 import TicketSummary from "./pages/reports/TicketSummary";
 import ResolutionReport from "./pages/reports/ResolutionReport";
+import EditTicket from "./pages/EditTicket";
 
 export const supportRoutes: RouteObject[] = [
     {
@@ -25,6 +26,10 @@ export const supportRoutes: RouteObject[] = [
             {
                 path: "create-ticket",
                 element: <CreateTicket />,
+            },
+            {
+                path: "edit-ticket/:id",
+                element: <EditTicket />,
             },
             {
                 path: "my-tickets",

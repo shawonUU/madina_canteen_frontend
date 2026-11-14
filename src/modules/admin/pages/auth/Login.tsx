@@ -1,1915 +1,1066 @@
+
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { login } from "../../services/authService";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  ArrowRight,
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-  ShieldCheck,
-  Building2,
-  CheckCircle2,
+    ArrowRight,
+    Eye,
+    EyeOff,
+    Lock,
+    Mail,
+    ShieldCheck,
+    Building2,
+    CheckCircle2,
 } from "lucide-react";
 
-type CharacterState =
-  | "idle"
-  | "watching"
-  | "hiding"
-  | "thinking"
-  | "loading"
-  | "error"
-  | "success";
+type Effect = "normal" | "night" | "wrong" | "success";
 
 export default function Login() {
-  const navigate = useNavigate();
-  const characterRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [remember, setRemember] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [effect, setEffect] = useState<Effect>("normal");
+    const [message, setMessage] = useState("");
+    const [mouse, setMouse] = useState({ x: 0, y: 0 });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [character, setCharacter] =
-    useState<CharacterState>("idle");
+    useEffect(() => {
+        return () => {
+            if (timer.current) {
+                clearTimeout(timer.current);
+            }
+        };
+    }, []);
 
-  const [mouse, setMouse] = useState({
-    x: 0,
-    y: 0,
-  });
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        const x = (e.clientX / window.innerWidth - 0.5) * 2;
+        const y = (e.clientY / window.innerHeight - 0.5) * 2;
 
-  // ============================================
-  // MOUSE TRACKING
-  // ============================================
-
-  useEffect(() => {
-    const move = (e: MouseEvent) => {
-      setMouse({
-        x: e.clientX,
-        y: e.clientY,
-      });
+        setMouse({ x, y });
     };
 
-    window.addEventListener("mousemove", move);
+    const sceneStyle = {
+        "--mouse-x": `${mouse.x * 18}px`,
+        "--mouse-y": `${mouse.y * 18}px`,
+    } as CSSProperties;
 
-    return () => {
-      window.removeEventListener("mousemove", move);
+    const handleEmailChange = (value: string) => {
+        setEmail(value);
+        setMessage("");
+
+        if (effect === "wrong" || effect === "success") {
+            setEffect("normal");
+        }
     };
-  }, []);
 
-  // ============================================
-  // EYE MOVEMENT
-  // ============================================
+    const handlePasswordChange = (value: string) => {
+        setPassword(value);
+        setMessage("");
 
-  const getEyePosition = () => {
-    if (!characterRef.current) {
-      return {
-        x: 0,
-        y: 0,
-      };
-    }
+        if (effect === "wrong" || effect === "success") {
+            setEffect("normal");
+        }
 
-    const rect =
-      characterRef.current.getBoundingClientRect();
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
 
-    const centerX =
-      rect.left + rect.width / 2;
+        if (value.length > 0) {
+            setEffect("night");
 
-    const centerY =
-      rect.top + 125;
-
-    const dx = mouse.x - centerX;
-    const dy = mouse.y - centerY;
-
-    const angle = Math.atan2(dy, dx);
-
-    const distance = Math.min(
-      8,
-      Math.sqrt(dx * dx + dy * dy) / 50
-    );
-
-    return {
-      x: Math.cos(angle) * distance,
-      y: Math.sin(angle) * distance,
+            timer.current = setTimeout(() => {
+                setEffect("normal");
+            }, 1100);
+        } else {
+            setEffect("normal");
+        }
     };
-  };
 
-  const eye = getEyePosition();
+    const handlePasswordFocus = () => {
+        if (password.length > 0) {
+            setEffect("night");
+        }
+    };
 
-  // ============================================
-  // EMAIL CHANGE
-  // ============================================
+    const handlePasswordBlur = () => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
 
-  const handleEmailChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = e.target.value;
+        if (effect === "night") {
+            setEffect("normal");
+        }
+    };
 
-    setForm({
-      ...form,
-      email: value,
-    });
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
 
-    setError("");
+        if (loading) return;
 
-    if (value.length > 0) {
-      setCharacter("watching");
-    } else {
-      setCharacter("idle");
-    }
-  };
+        setLoading(true);
+        setMessage("");
+        setEffect("night");
 
-  // ============================================
-  // PASSWORD FOCUS
-  // ============================================
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
 
-  const handlePasswordFocus = () => {
-    setCharacter("hiding");
-  };
+        try {
+            await login({
+                email,
+                password,
+            });
 
-  const handlePasswordBlur = () => {
-    if (!loading && !error) {
-      setCharacter(
-        form.email.length > 0
-          ? "watching"
-          : "idle"
-      );
-    }
-  };
+            setEffect("success");
+            setMessage("Welcome back! Login successful.");
 
-  // ============================================
-  // LOGIN
-  // ============================================
+            await new Promise((resolve) => setTimeout(resolve, 1200));
 
-  const handleSubmit = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
+            navigate("/dashboard");
+        } catch (err: any) {
+            setEffect("wrong");
 
-    setLoading(true);
-    setError("");
-    setCharacter("thinking");
+            setMessage(
+                err.response?.data?.message ||
+                "Invalid email or password"
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 500)
-    );
-
-    setCharacter("loading");
-
-    try {
-      await login(form);
-
-      setCharacter("success");
-      setLoading(false);
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1200)
-      );
-
-      navigate("/dashboard");
-    } catch (err: any) {
-      setLoading(false);
-
-      setError(
-        err.response?.data?.message ||
-          "Invalid email or password"
-      );
-
-      setCharacter("error");
-    }
-  };
-
-  // ============================================
-  // CHARACTER MESSAGE
-  // ============================================
-
-  const getCharacterMessage = () => {
-    switch (character) {
-      case "idle":
-        return "Welcome to Madina ERP";
-
-      case "watching":
-        return "Ready to sign in?";
-
-      case "hiding":
-        return "Your password is safe with me";
-
-      case "thinking":
-        return "Verifying your credentials...";
-
-      case "loading":
-        return "Signing you in...";
-
-      case "error":
-        return "Please check your credentials";
-
-      case "success":
-        return "Welcome back!";
-
-      default:
-        return "Welcome to Madina ERP";
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f4f7fb] relative overflow-hidden flex items-center justify-center p-4">
-
-      {/* ==========================================
-          BACKGROUND
-      =========================================== */}
-
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-
+    return (
         <div
-          className="
-            absolute
-            -top-60
-            -left-60
-            w-[650px]
-            h-[650px]
-            rounded-full
-            bg-blue-200/30
-            blur-[140px]
-          "
-        />
-
-        <div
-          className="
-            absolute
-            -bottom-60
-            -right-60
-            w-[650px]
-            h-[650px]
-            rounded-full
-            bg-slate-300/30
-            blur-[140px]
-          "
-        />
-
-        <div
-          className="
-            absolute
-            top-[15%]
-            right-[8%]
-            w-2
-            h-2
-            rounded-full
-            bg-blue-400
-            animate-pulse
-          "
-        />
-
-        <div
-          className="
-            absolute
-            bottom-[18%]
-            left-[7%]
-            w-3
-            h-3
-            rounded-full
-            bg-blue-300
-            animate-ping
-          "
-        />
-
-        <div
-          className="
-            absolute
-            top-[35%]
-            left-[3%]
-            w-16
-            h-16
-            border
-            border-blue-200/50
-            rounded-full
-          "
-        />
-
-        <div
-          className="
-            absolute
-            bottom-[12%]
-            right-[4%]
-            w-24
-            h-24
-            border
-            border-slate-200
-            rounded-full
-          "
-        />
-
-      </div>
-
-
-      {/* ==========================================
-          MAIN CARD
-      =========================================== */}
-
-      <div
-        className="
-          relative
-          w-full
-          max-w-[1180px]
-          min-h-[680px]
-          bg-white
-          rounded-[30px]
-          border
-          border-slate-200
-          shadow-[0_30px_80px_rgba(15,23,42,0.12)]
-          overflow-hidden
-          grid
-          lg:grid-cols-2
-          animate-[pageEnter_0.7s_ease-out]
-        "
-      >
-
-        {/* ========================================
-            LEFT / ERP ASSISTANT AREA
-        ========================================= */}
-
-        <div
-          className="
-            hidden
-            lg:flex
-            relative
-            items-center
-            justify-center
-            overflow-hidden
-            bg-gradient-to-br
-            from-[#071a3d]
-            via-[#0b2a5b]
-            to-[#123b73]
-          "
+            className={`app ${effect}`}
+            onMouseMove={handleMouseMove}
+            style={sceneStyle}
         >
-
-          {/* background grid */}
-
-          <div
-            className="
-              absolute
-              inset-0
-              opacity-[0.08]
-              bg-[linear-gradient(rgba(255,255,255,.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.7)_1px,transparent_1px)]
-              bg-[size:45px_45px]
-            "
-          />
-
-          {/* blue glow */}
-
-          <div
-            className="
-              absolute
-              top-[-120px]
-              left-[-120px]
-              w-[400px]
-              h-[400px]
-              rounded-full
-              bg-blue-400/20
-              blur-[100px]
-            "
-          />
-
-          <div
-            className="
-              absolute
-              bottom-[-150px]
-              right-[-100px]
-              w-[450px]
-              h-[450px]
-              rounded-full
-              bg-cyan-400/10
-              blur-[110px]
-            "
-          />
-
-
-          {/* ======================================
-              TOP BRAND
-          ======================================= */}
-
-          <div
-            className="
-              absolute
-              top-8
-              left-8
-              right-8
-              flex
-              items-center
-              justify-between
-              z-30
-            "
-          >
-
-            <div className="flex items-center gap-3">
-
-              <div
-                className="
-                  w-11
-                  h-11
-                  rounded-xl
-                  bg-white/10
-                  border
-                  border-white/15
-                  backdrop-blur
-                  flex
-                  items-center
-                  justify-center
-                  shadow-lg
-                "
-              >
-                <Building2
-                  size={22}
-                  className="text-white"
-                />
-              </div>
-
-              <div>
-
-                <div
-                  className="
-                    text-white
-                    font-black
-                    text-lg
-                    tracking-tight
-                  "
-                >
-                  Madina ERP
-                </div>
-
-                <div
-                  className="
-                    text-blue-200
-                    text-[10px]
-                    uppercase
-                    tracking-[0.2em]
-                  "
-                >
-                  Enterprise Resource Planning
-                </div>
-
-              </div>
-
-            </div>
-
-
-            <div
-              className="
-                px-3
-                py-1.5
-                rounded-full
-                bg-white/10
-                border
-                border-white/10
-                text-blue-100
-                text-xs
-                font-semibold
-              "
-            >
-              Secure Access
-            </div>
-
-          </div>
-
-
-          {/* ======================================
-              ORBITS
-          ======================================= */}
-
-          <div
-            className="
-              absolute
-              w-[430px]
-              h-[430px]
-              rounded-full
-              border
-              border-white/10
-              animate-[slowSpin_35s_linear_infinite]
-            "
-          />
-
-          <div
-            className="
-              absolute
-              w-[330px]
-              h-[330px]
-              rounded-full
-              border
-              border-dashed
-              border-blue-300/15
-              animate-[slowSpinReverse_25s_linear_infinite]
-            "
-          />
-
-
-          {/* orbit dots */}
-
-          <div
-            className="
-              absolute
-              w-3
-              h-3
-              rounded-full
-              bg-blue-300
-              shadow-[0_0_20px_rgba(147,197,253,.8)]
-              animate-[orbitDot_5s_linear_infinite]
-            "
-          />
-
-          <div
-            className="
-              absolute
-              w-2
-              h-2
-              rounded-full
-              bg-cyan-300
-              shadow-[0_0_15px_rgba(103,232,249,.8)]
-              animate-[orbitDotReverse_7s_linear_infinite]
-            "
-          />
-
-
-          {/* ======================================
-              SPEECH BUBBLE
-          ======================================= */}
-
-          <div
-            className={`
-              absolute
-              top-28
-              right-14
-              z-40
-              px-5
-              py-3
-              bg-white
-              rounded-2xl
-              shadow-[0_15px_35px_rgba(0,0,0,.2)]
-              border
-              border-slate-100
-              text-slate-700
-              text-sm
-              font-semibold
-              transition-all
-              duration-300
-              ${
-                character === "success"
-                  ? "scale-105"
-                  : ""
-              }
-            `}
-          >
-            {getCharacterMessage()}
-
-            <div
-              className="
-                absolute
-                -bottom-2
-                left-8
-                w-4
-                h-4
-                bg-white
-                rotate-45
-              "
-            />
-
-          </div>
-
-
-          {/* ======================================
-              3D ERP ASSISTANT
-          ======================================= */}
-
-          <div
-            ref={characterRef}
-            className={`
-              relative
-              w-[330px]
-              h-[455px]
-              z-20
-              transition-all
-              duration-500
-              ${
-                character === "success"
-                  ? "animate-[assistantCelebrate_.55s_ease-in-out_infinite]"
-                  : character === "error"
-                  ? "animate-[assistantShake_.35s_ease-in-out_infinite]"
-                  : character === "thinking"
-                  ? "animate-[assistantThinking_1s_ease-in-out_infinite]"
-                  : character === "loading"
-                  ? "animate-[assistantLoading_.8s_ease-in-out_infinite]"
-                  : "animate-[assistantFloat_4s_ease-in-out_infinite]"
-              }
-            `}
-          >
-
-            {/* shadow */}
-
-            <div
-              className="
-                absolute
-                bottom-0
-                left-1/2
-                -translate-x-1/2
-                w-48
-                h-7
-                rounded-full
-                bg-black/25
-                blur-xl
-              "
-            />
-
-
-            {/* ==================================
-                BODY
-            ================================== */}
-
-            <div
-              className="
-                absolute
-                bottom-12
-                left-1/2
-                -translate-x-1/2
-                w-[225px]
-                h-[220px]
-                rounded-[42px]
-                bg-gradient-to-br
-                from-[#2563eb]
-                via-[#1d4ed8]
-                to-[#172554]
-                shadow-[inset_-20px_-20px_30px_rgba(0,0,0,.25),inset_15px_10px_25px_rgba(255,255,255,.16),0_25px_45px_rgba(0,0,0,.25)]
-              "
-            >
-
-              {/* shirt center */}
-
-              <div
-                className="
-                  absolute
-                  top-7
-                  left-1/2
-                  -translate-x-1/2
-                  w-[145px]
-                  h-[165px]
-                  rounded-[32px]
-                  bg-slate-50
-                  shadow-inner
-                "
-              >
-
-                {/* ID badge */}
-
-                <div
-                  className="
-                    absolute
-                    top-8
-                    left-1/2
-                    -translate-x-1/2
-                    w-14
-                    h-16
-                    rounded-lg
-                    bg-white
-                    border
-                    border-slate-200
-                    shadow-md
-                    flex
-                    flex-col
-                    items-center
-                    justify-center
-                  "
-                >
-
-                  <Building2
-                    size={18}
-                    className="text-blue-600"
-                  />
-
-                  <span
-                    className="
-                      text-[7px]
-                      font-black
-                      text-slate-500
-                      mt-1
-                    "
-                  >
-                    ERP
-                  </span>
-
-                </div>
-
-                {/* buttons */}
-
-                <div
-                  className="
-                    absolute
-                    top-8
-                    left-3
-                    space-y-5
-                  "
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                </div>
-
-              </div>
-
-
-              {/* LEFT ARM */}
-
-              <div
-                className={`
-                  absolute
-                  -left-9
-                  top-16
-                  w-16
-                  h-24
-                  rounded-full
-                  bg-gradient-to-br
-                  from-[#2563eb]
-                  to-[#172554]
-                  origin-top-right
-                  transition-all
-                  duration-500
-                  ${
-                    character === "hiding"
-                      ? "translate-x-9 -rotate-[55deg]"
-                      : character === "success"
-                      ? "-rotate-[35deg]"
-                      : ""
-                  }
-                `}
-              />
-
-
-              {/* RIGHT ARM */}
-
-              <div
-                className={`
-                  absolute
-                  -right-9
-                  top-16
-                  w-16
-                  h-24
-                  rounded-full
-                  bg-gradient-to-br
-                  from-[#2563eb]
-                  to-[#172554]
-                  origin-top-left
-                  transition-all
-                  duration-500
-                  ${
-                    character === "hiding"
-                      ? "-translate-x-9 rotate-[55deg]"
-                      : character === "success"
-                      ? "rotate-[35deg]"
-                      : ""
-                  }
-                `}
-              />
-
-            </div>
-
-
-            {/* ==================================
-                HEAD
-            ================================== */}
-
-            <div
-              className="
-                absolute
-                top-24
-                left-1/2
-                -translate-x-1/2
-                w-[245px]
-                h-[205px]
-                rounded-[44%]
-                bg-gradient-to-br
-                from-[#ffd7b0]
-                via-[#f5b98c]
-                to-[#c97950]
-                shadow-[inset_-15px_-18px_30px_rgba(0,0,0,.16),inset_15px_10px_25px_rgba(255,255,255,.35),0_20px_35px_rgba(0,0,0,.18)]
-              "
-            >
-
-              {/* hair */}
-
-              <div
-                className="
-                  absolute
-                  -top-3
-                  left-1/2
-                  -translate-x-1/2
-                  w-[220px]
-                  h-[65px]
-                  rounded-t-[50%]
-                  bg-gradient-to-b
-                  from-[#172033]
-                  to-[#0f172a]
-                  shadow-lg
-                "
-              />
-
-              {/* hair side */}
-
-              <div
-                className="
-                  absolute
-                  top-7
-                  left-2
-                  w-9
-                  h-20
-                  rounded-full
-                  bg-[#172033]
-                "
-              />
-
-              <div
-                className="
-                  absolute
-                  top-7
-                  right-2
-                  w-9
-                  h-20
-                  rounded-full
-                  bg-[#172033]
-                "
-              />
-
-
-              {/* =================================
-                  LEFT EYE
-              ================================== */}
-
-              <div
-                className="
-                  absolute
-                  top-[68px]
-                  left-[38px]
-                  w-[68px]
-                  h-[74px]
-                  rounded-full
-                  bg-white
-                  overflow-hidden
-                  shadow-[inset_0_-7px_13px_rgba(0,0,0,.12)]
-                "
-              >
-
-                {character !== "hiding" &&
-                  character !== "error" && (
-                    <div
-                      className="
-                        absolute
-                        w-6
-                        h-6
-                        rounded-full
-                        bg-slate-900
-                        transition-transform
-                        duration-100
-                      "
-                      style={{
-                        left:
-                          `calc(50% - 12px + ${eye.x}px)`,
-                        top:
-                          `calc(50% - 12px + ${eye.y}px)`,
-                      }}
-                    >
-                      <div
-                        className="
-                          absolute
-                          top-1
-                          left-1
-                          w-2
-                          h-2
-                          bg-white
-                          rounded-full
-                        "
-                      />
-                    </div>
-                  )}
-
-              </div>
-
-
-              {/* RIGHT EYE */}
-
-              <div
-                className="
-                  absolute
-                  top-[68px]
-                  right-[38px]
-                  w-[68px]
-                  h-[74px]
-                  rounded-full
-                  bg-white
-                  overflow-hidden
-                  shadow-[inset_0_-7px_13px_rgba(0,0,0,.12)]
-                "
-              >
-
-                {character !== "hiding" &&
-                  character !== "error" && (
-                    <div
-                      className="
-                        absolute
-                        w-6
-                        h-6
-                        rounded-full
-                        bg-slate-900
-                        transition-transform
-                        duration-100
-                      "
-                      style={{
-                        left:
-                          `calc(50% - 12px + ${eye.x}px)`,
-                        top:
-                          `calc(50% - 12px + ${eye.y}px)`,
-                      }}
-                    >
-                      <div
-                        className="
-                          absolute
-                          top-1
-                          left-1
-                          w-2
-                          h-2
-                          bg-white
-                          rounded-full
-                        "
-                      />
-                    </div>
-                  )}
-
-              </div>
-
-
-              {/* ERROR EYES */}
-
-              {character === "error" && (
-                <>
-                  <div
-                    className="
-                      absolute
-                      top-[96px]
-                      left-[43px]
-                      w-11
-                      h-2
-                      bg-red-600
-                      rotate-[25deg]
-                      rounded-full
-                    "
-                  />
-
-                  <div
-                    className="
-                      absolute
-                      top-[96px]
-                      right-[43px]
-                      w-11
-                      h-2
-                      bg-red-600
-                      rotate-[-25deg]
-                      rounded-full
-                    "
-                  />
-                </>
-              )}
-
-
-              {/* SUCCESS EYES */}
-
-              {character === "success" && (
-                <>
-                  <div
-                    className="
-                      absolute
-                      top-[95px]
-                      left-[45px]
-                      w-11
-                      h-6
-                      border-t-4
-                      border-slate-800
-                      rounded-full
-                    "
-                  />
-
-                  <div
-                    className="
-                      absolute
-                      top-[95px]
-                      right-[45px]
-                      w-11
-                      h-6
-                      border-t-4
-                      border-slate-800
-                      rounded-full
-                    "
-                  />
-                </>
-              )}
-
-
-              {/* NOSE */}
-
-              <div
-                className="
-                  absolute
-                  top-[128px]
-                  left-1/2
-                  -translate-x-1/2
-                  w-4
-                  h-6
-                  border-r-2
-                  border-b-2
-                  border-[#b56b48]
-                  rounded-br-full
-                "
-              />
-
-
-              {/* MOUTH */}
-
-              <div
-                className={`
-                  absolute
-                  bottom-7
-                  left-1/2
-                  -translate-x-1/2
-                  border-slate-800
-                  transition-all
-                  duration-300
-                  ${
-                    character === "success"
-                      ? "w-16 h-9 border-b-8 rounded-full"
-                      : character === "error"
-                      ? "w-12 h-7 border-t-4 rounded-full"
-                      : character === "thinking"
-                      ? "w-7 h-7 border-r-4 border-b-4 rounded-full rotate-45"
-                      : "w-14 h-7 border-b-4 rounded-full"
-                  }
-                `}
-              />
-
-            </div>
-
-
-            {/* ==================================
-                LAPTOP / ERP DEVICE
-            ================================== */}
-
-            <div
-              className={`
-                absolute
-                bottom-[25px]
-                left-1/2
-                -translate-x-1/2
-                z-30
-                transition-all
-                duration-500
-                ${
-                  character === "success"
-                    ? "translate-y-[-15px] scale-110"
-                    : character === "loading"
-                    ? "rotate-[-2deg]"
-                    : ""
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+                * {
+                    box-sizing: border-box;
                 }
-              `}
-            >
 
-              {/* screen */}
+                html, body, #root {
+                    width: 100%;
+                    height: 100%;
+                    margin: 0;
+                    overflow: hidden;
+                }
 
-              <div
-                className="
-                  w-[150px]
-                  h-[92px]
-                  rounded-xl
-                  bg-slate-900
-                  border-[5px]
-                  border-slate-700
-                  shadow-2xl
-                  overflow-hidden
-                "
-              >
+                body {
+                    font-family: 'DM Sans', sans-serif;
+                }
 
-                <div
-                  className="
-                    h-full
-                    bg-gradient-to-br
-                    from-blue-50
-                    to-slate-100
-                    p-3
-                  "
-                >
+                button, input {
+                    font: inherit;
+                }
 
-                  <div className="flex gap-1 mb-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                  </div>
+                .app {
+                    --mouse-x: 0px;
+                    --mouse-y: 0px;
+                    position: relative;
+                    width: 100%;
+                    height: 100vh;
+                    height: 100dvh;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    background: #090b20;
+                    color: white;
+                    isolation: isolate;
+                    transition: background 1s ease;
+                }
 
-                  <div className="flex gap-2">
+                .app::before {
+                    content: "";
+                    position: absolute;
+                    inset: -30%;
+                    z-index: -2;
+                    background:
+                        radial-gradient(circle at 75% 35%, rgba(102,65,255,.30), transparent 27%),
+                        radial-gradient(circle at 20% 80%, rgba(0,220,255,.13), transparent 28%),
+                        radial-gradient(circle at 50% 10%, rgba(255,76,180,.12), transparent 25%);
+                    animation: backgroundFloat 12s ease-in-out infinite alternate;
+                    transform: translate(var(--mouse-x), var(--mouse-y));
+                    transition: background 1s ease;
+                }
 
-                    <div
-                      className="
-                        w-7
-                        bg-blue-600/20
-                        rounded
-                        h-14
-                      "
+                .app::after {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    z-index: -1;
+                    pointer-events: none;
+                    opacity: 0;
+                    background:
+                        radial-gradient(circle at 50% 50%, rgba(0,0,0,.78), transparent 75%),
+                        linear-gradient(120deg, rgba(8,12,36,.85), rgba(22,17,55,.5));
+                    transition: opacity .8s ease;
+                }
+
+                .app.night::after {
+                    opacity: 1;
+                }
+
+                .app.night {
+                    background: #030511;
+                }
+
+                .app.wrong {
+                    background: #190817;
+                }
+
+                .app.success {
+                    background: #061c1a;
+                }
+
+                .app.wrong::before {
+                    background:
+                        radial-gradient(circle at 75% 35%, rgba(255,35,75,.32), transparent 30%),
+                        radial-gradient(circle at 20% 80%, rgba(255,90,30,.15), transparent 30%);
+                }
+
+                .app.success::before {
+                    background:
+                        radial-gradient(circle at 75% 35%, rgba(0,255,160,.30), transparent 30%),
+                        radial-gradient(circle at 20% 80%, rgba(0,220,255,.18), transparent 30%);
+                }
+
+                .ambient {
+                    position: absolute;
+                    width: 450px;
+                    height: 450px;
+                    border-radius: 50%;
+                    filter: blur(100px);
+                    pointer-events: none;
+                    transition: all 1s ease;
+                }
+
+                .ambient.one {
+                    top: -220px;
+                    right: 10%;
+                    background: rgba(105,65,255,.23);
+                }
+
+                .ambient.two {
+                    bottom: -250px;
+                    left: 20%;
+                    background: rgba(0,200,255,.15);
+                }
+
+                .sun-glow, .moon-glow {
+                    position: absolute;
+                    width: 260px;
+                    height: 260px;
+                    border-radius: 50%;
+                    right: 13%;
+                    top: 12%;
+                    pointer-events: none;
+                    transition: all 1s ease;
+                }
+
+                .sun-glow {
+                    opacity: .65;
+                    background: radial-gradient(circle, rgba(255,186,72,.23), transparent 70%);
+                    animation: sunPulse 5s ease-in-out infinite;
+                }
+
+                .moon-glow {
+                    opacity: 0;
+                    transform: scale(.7);
+                    background: radial-gradient(circle, rgba(110,130,255,.35), transparent 70%);
+                }
+
+                .app.night .sun-glow {
+                    opacity: .12;
+                    transform: scale(.7);
+                }
+
+                .app.night .moon-glow {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+
+                .stars {
+                    position: absolute;
+                    inset: 0;
+                    pointer-events: none;
+                    opacity: .4;
+                    transition: opacity .8s ease;
+                }
+
+                .app.night .stars {
+                    opacity: 1;
+                }
+
+                .star {
+                    position: absolute;
+                    width: 3px;
+                    height: 3px;
+                    border-radius: 50%;
+                    background: white;
+                    box-shadow: 0 0 10px white;
+                    animation: twinkle 2s ease-in-out infinite alternate;
+                }
+
+                .layout {
+                    width: min(1180px, 90%);
+                    height: 100%;
+                    margin: auto;
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    align-items: center;
+                    gap: 40px;
+                    position: relative;
+                    z-index: 2;
+                }
+
+                .login-section {
+                    width: 100%;
+                    max-width: 430px;
+                    padding: 20px 0;
+                    animation: enterLeft .8s ease both;
+                }
+
+                .brand {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 55px;
+                }
+
+                .brand-icon {
+                    width: 43px;
+                    height: 43px;
+                    display: grid;
+                    place-items: center;
+                    border-radius: 14px;
+                    font-size: 23px;
+                    font-weight: 800;
+                    background: linear-gradient(135deg, #9b6cff, #4b7bff);
+                    box-shadow: 0 8px 30px rgba(115,95,255,.4);
+                }
+
+                .brand-name {
+                    font-family: 'Space Grotesk', sans-serif;
+                    font-size: 23px;
+                    font-weight: 700;
+                    letter-spacing: 2px;
+                }
+
+                .heading {
+                    font-family: 'Space Grotesk', sans-serif;
+                    font-size: clamp(35px, 4vw, 48px);
+                    line-height: 1.12;
+                    font-weight: 700;
+                    letter-spacing: -2px;
+                    margin: 0 0 14px;
+                }
+
+                .heading span {
+                    color: #a78bfa;
+                }
+
+                .subtitle {
+                    color: #999bb9;
+                    font-size: 14px;
+                    line-height: 1.7;
+                    margin-bottom: 36px;
+                }
+
+                .field {
+                    margin-bottom: 22px;
+                }
+
+                .field label {
+                    display: block;
+                    color: #d8d7ed;
+                    font-size: 13px;
+                    font-weight: 600;
+                    margin-bottom: 10px;
+                }
+
+                .input-wrap {
+                    height: 55px;
+                    display: flex;
+                    align-items: center;
+                    border: 1px solid rgba(255,255,255,.12);
+                    border-radius: 13px;
+                    background: rgba(255,255,255,.045);
+                    transition: all .3s ease;
+                    overflow: hidden;
+                }
+
+                .input-wrap:focus-within {
+                    border-color: #9b7cff;
+                    background: rgba(130,100,255,.09);
+                    box-shadow: 0 0 0 4px rgba(140,110,255,.10), 0 0 25px rgba(130,100,255,.12);
+                }
+
+                .app.night .input-wrap:focus-within {
+                    border-color: #7e8fff;
+                    box-shadow: 0 0 25px rgba(95,120,255,.22);
+                }
+
+                .app.wrong .input-wrap {
+                    border-color: rgba(255,65,90,.7);
+                    box-shadow: 0 0 18px rgba(255,50,80,.13);
+                }
+
+                .app.success .input-wrap {
+                    border-color: rgba(0,255,170,.6);
+                    box-shadow: 0 0 18px rgba(0,255,170,.12);
+                }
+
+                .input-icon {
+                    width: 48px;
+                    text-align: center;
+                    color: #8889ad;
+                    font-size: 18px;
+                    flex-shrink: 0;
+                }
+
+                .input-wrap input {
+                    width: 100%;
+                    height: 100%;
+                    color: white;
+                    background: transparent;
+                    border: none;
+                    outline: none;
+                    font-size: 14px;
+                    padding: 0 12px 0 0;
+                }
+
+                .input-wrap input::placeholder {
+                    color: #686a8b;
+                }
+
+                .password-toggle {
+                    border: none;
+                    color: #9698b8;
+                    background: transparent;
+                    cursor: pointer;
+                    padding: 12px 15px;
+                }
+
+                .password-toggle:hover {
+                    color: white;
+                }
+
+                .form-options {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin: 4px 0 28px;
+                    font-size: 12px;
+                }
+
+                .remember {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #aaaac5;
+                    cursor: pointer;
+                }
+
+                .remember input {
+                    accent-color: #9674ff;
+                }
+
+                .text-link {
+                    color: #ad94ff;
+                    text-decoration: none;
+                    cursor: pointer;
+                }
+
+                .text-link:hover {
+                    color: white;
+                }
+
+                .submit-btn {
+                    width: 100%;
+                    height: 55px;
+                    border: none;
+                    border-radius: 13px;
+                    color: white;
+                    font-size: 15px;
+                    font-weight: 700;
+                    letter-spacing: .4px;
+                    cursor: pointer;
+                    background: linear-gradient(100deg, #8058ed, #5278ff);
+                    box-shadow: 0 10px 30px rgba(105,90,255,.25);
+                    transition: all .3s ease;
+                }
+
+                .submit-btn:hover:not(:disabled) {
+                    transform: translateY(-3px);
+                    box-shadow: 0 15px 35px rgba(105,90,255,.4);
+                }
+
+                .submit-btn:active:not(:disabled) {
+                    transform: scale(.98);
+                }
+
+                .submit-btn:disabled {
+                    opacity: .7;
+                    cursor: not-allowed;
+                }
+
+                .app.wrong .submit-btn {
+                    background: linear-gradient(100deg, #e83e64, #ff754d);
+                    box-shadow: 0 10px 30px rgba(255,60,80,.2);
+                }
+
+                .app.success .submit-btn {
+                    background: linear-gradient(100deg, #00a982, #00c9a7);
+                    box-shadow: 0 10px 30px rgba(0,220,160,.2);
+                }
+
+                .message {
+                    min-height: 22px;
+                    margin-top: 14px;
+                    font-size: 12px;
+                    color: #ff8293;
+                }
+
+                .app.success .message {
+                    color: #53eac0;
+                }
+
+                .register {
+                    text-align: center;
+                    color: #888aa9;
+                    font-size: 13px;
+                    margin-top: 28px;
+                }
+
+                .scene {
+                    height: 580px;
+                    position: relative;
+                    display: grid;
+                    place-items: center;
+                    perspective: 1000px;
+                }
+
+                .app.wrong .scene {
+                    animation: shake .45s ease;
+                }
+
+                .app.success .scene {
+                    animation: celebrate .8s ease;
+                }
+
+                .scene-inner {
+                    width: 100%;
+                    height: 100%;
+                    position: relative;
+                    transform-style: preserve-3d;
+                    transform:
+                        rotateY(calc(var(--mouse-x) * .45))
+                        rotateX(calc(var(--mouse-y) * -.45));
+                    transition: transform .18s ease-out;
+                }
+
+                .orb {
+                    position: absolute;
+                    width: 220px;
+                    height: 220px;
+                    left: 50%;
+                    top: 50%;
+                    margin: -110px 0 0 -110px;
+                    border-radius: 50%;
+                    background:
+                        radial-gradient(circle at 30% 25%, #fff 0%, #c3b0ff 5%, #8861ed 25%, #4427a5 55%, #17104e 80%);
+                    box-shadow:
+                        inset -20px -25px 45px rgba(0,0,0,.55),
+                        inset 12px 12px 25px rgba(255,255,255,.35),
+                        0 0 70px rgba(125,88,255,.5),
+                        0 0 140px rgba(90,75,255,.2);
+                    transform: translate3d(
+                        calc(var(--mouse-x) * .7),
+                        calc(var(--mouse-y) * .7),
+                        40px
+                    );
+                    animation: orbFloat 5s ease-in-out infinite;
+                    transition: box-shadow .8s ease, filter .8s ease;
+                }
+
+                .app.night .orb {
+                    filter: brightness(.65) hue-rotate(20deg);
+                    box-shadow: 0 0 90px rgba(90,120,255,.5);
+                }
+
+                .app.wrong .orb {
+                    filter: hue-rotate(120deg);
+                    box-shadow: 0 0 90px rgba(255,40,75,.6);
+                }
+
+                .app.success .orb {
+                    filter: hue-rotate(100deg);
+                    box-shadow: 0 0 100px rgba(0,255,170,.5);
+                }
+
+                .orb::before {
+                    content: "";
+                    position: absolute;
+                    inset: 12px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255,255,255,.35);
+                    transform: rotate(-25deg) scaleY(.35);
+                }
+
+                .orbit {
+                    position: absolute;
+                    width: 390px;
+                    height: 145px;
+                    left: 50%;
+                    top: 50%;
+                    margin: -72px 0 0 -195px;
+                    border: 2px solid rgba(178,153,255,.7);
+                    border-radius: 50%;
+                    transform: rotate(-28deg) translate3d(
+                        calc(var(--mouse-x) * 1.1),
+                        calc(var(--mouse-y) * 1.1),
+                        70px
+                    );
+                    box-shadow: 0 0 18px rgba(150,115,255,.3);
+                    animation: orbitSpin 12s linear infinite;
+                    transition: border-color .8s ease;
+                }
+
+                .orbit.two {
+                    width: 380px;
+                    height: 155px;
+                    margin-left: -190px;
+                    transform: rotate(65deg);
+                    animation: orbitSpinReverse 16s linear infinite;
+                    border-color: rgba(65,220,255,.55);
+                }
+
+                .orbit-dot {
+                    position: absolute;
+                    width: 13px;
+                    height: 13px;
+                    border-radius: 50%;
+                    background: #8eeaff;
+                    box-shadow: 0 0 20px #48dfff;
+                    top: 45%;
+                    left: 16%;
+                }
+
+                .cube-wrap {
+                    position: absolute;
+                    right: 5%;
+                    top: 14%;
+                    width: 90px;
+                    height: 90px;
+                    transform: translate3d(
+                        calc(var(--mouse-x) * -1.1),
+                        calc(var(--mouse-y) * -1.1),
+                        100px
+                    );
+                    animation: cubeFloat 7s ease-in-out infinite;
+                }
+
+                .cube {
+                    width: 100%;
+                    height: 100%;
+                    position: relative;
+                    transform-style: preserve-3d;
+                    animation: cubeRotate 12s linear infinite;
+                }
+
+                .cube-face {
+                    position: absolute;
+                    width: 90px;
+                    height: 90px;
+                    border: 1px solid rgba(255,255,255,.6);
+                    background: rgba(142,105,255,.18);
+                    box-shadow: inset 0 0 25px rgba(160,125,255,.2);
+                    backdrop-filter: blur(5px);
+                }
+
+                .front { transform: translateZ(45px); }
+                .back { transform: rotateY(180deg) translateZ(45px); }
+                .right { transform: rotateY(90deg) translateZ(45px); }
+                .left { transform: rotateY(-90deg) translateZ(45px); }
+                .top { transform: rotateX(90deg) translateZ(45px); }
+                .bottom { transform: rotateX(-90deg) translateZ(45px); }
+
+                .donut {
+                    position: absolute;
+                    width: 85px;
+                    height: 85px;
+                    left: 7%;
+                    bottom: 18%;
+                    border: 15px solid #ff78d2;
+                    border-radius: 50%;
+                    box-shadow: 0 0 30px rgba(255,90,200,.4), inset 0 0 15px rgba(255,255,255,.4);
+                    transform: translate3d(
+                        calc(var(--mouse-x) * .8),
+                        calc(var(--mouse-y) * .8),
+                        80px
+                    ) rotateX(65deg);
+                    animation: donutFloat 6s ease-in-out infinite;
+                }
+
+                .floating-ball {
+                    position: absolute;
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #9efaff, #477dff);
+                    box-shadow: 0 0 25px rgba(70,200,255,.6);
+                    right: 12%;
+                    bottom: 22%;
+                    transform: translate3d(
+                        calc(var(--mouse-x) * -1.5),
+                        calc(var(--mouse-y) * -1.5),
+                        130px
+                    );
+                    animation: ballFloat 4s ease-in-out infinite;
+                }
+
+                .mini-ball {
+                    position: absolute;
+                    width: 16px;
+                    height: 16px;
+                    left: 19%;
+                    top: 20%;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #ffe1a0, #ff8c7a);
+                    box-shadow: 0 0 25px rgba(255,180,100,.5);
+                    animation: ballFloat 5s ease-in-out infinite reverse;
+                }
+
+                .app.wrong .orbit {
+                    border-color: rgba(255,75,100,.7);
+                }
+
+                .app.success .orbit {
+                    border-color: rgba(0,255,180,.7);
+                }
+
+                .scene-label {
+                    position: absolute;
+                    left: 50%;
+                    bottom: 5%;
+                    transform: translateX(-50%);
+                    color: rgba(220,215,255,.65);
+                    font-family: 'Space Grotesk', sans-serif;
+                    font-size: 11px;
+                    letter-spacing: 5px;
+                    white-space: nowrap;
+                }
+
+                @keyframes backgroundFloat {
+                    from { transform: translate3d(-2%,-1%,0) scale(1); }
+                    to { transform: translate3d(2%,2%,0) scale(1.08); }
+                }
+
+                @keyframes sunPulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.2); }
+                }
+
+                @keyframes twinkle {
+                    from { opacity: .25; transform: scale(.7); }
+                    to { opacity: 1; transform: scale(1.5); }
+                }
+
+                @keyframes orbFloat {
+                    0%, 100% { margin-top: -110px; }
+                    50% { margin-top: -130px; }
+                }
+
+                @keyframes orbitSpin {
+                    from { rotate: 0deg; }
+                    to { rotate: 360deg; }
+                }
+
+                @keyframes orbitSpinReverse {
+                    from { rotate: 360deg; }
+                    to { rotate: 0deg; }
+                }
+
+                @keyframes cubeRotate {
+                    from { transform: rotateX(0) rotateY(0); }
+                    to { transform: rotateX(360deg) rotateY(360deg); }
+                }
+
+                @keyframes cubeFloat {
+                    0%, 100% { margin-top: 0; }
+                    50% { margin-top: -25px; }
+                }
+
+                @keyframes donutFloat {
+                    0%, 100% { margin-bottom: 0; }
+                    50% { margin-bottom: 25px; }
+                }
+
+                @keyframes ballFloat {
+                    0%, 100% { margin-top: 0; }
+                    50% { margin-top: -35px; }
+                }
+
+                @keyframes enterLeft {
+                    from { opacity: 0; transform: translateX(-35px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    20%, 60% { transform: translateX(-9px); }
+                    40%, 80% { transform: translateX(9px); }
+                }
+
+                @keyframes celebrate {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+
+                @media (max-width: 850px) {
+                    .layout {
+                        width: min(480px, 88%);
+                        grid-template-columns: 1fr;
+                        gap: 0;
+                    }
+
+                    .login-section {
+                        max-width: 100%;
+                    }
+
+                    .scene {
+                        display: none;
+                    }
+
+                    .brand {
+                        margin-bottom: 45px;
+                    }
+
+                    .ambient.one {
+                        right: -250px;
+                    }
+                }
+
+                @media (max-height: 650px) and (min-width: 851px) {
+                    .layout {
+                        width: 92%;
+                        gap: 20px;
+                    }
+
+                    .login-section {
+                        transform: scale(.88);
+                        transform-origin: left center;
+                    }
+
+                    .scene {
+                        transform: scale(.82);
+                    }
+
+                    .brand {
+                        margin-bottom: 25px;
+                    }
+
+                    .subtitle {
+                        margin-bottom: 22px;
+                    }
+
+                    .field {
+                        margin-bottom: 15px;
+                    }
+
+                    .form-options {
+                        margin-bottom: 18px;
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    *, *::before, *::after {
+                        animation-duration: .01ms !important;
+                        animation-iteration-count: 1 !important;
+                        scroll-behavior: auto !important;
+                    }
+                }
+            `}</style>
+
+            <div className="ambient one" />
+            <div className="ambient two" />
+            <div className="sun-glow" />
+            <div className="moon-glow" />
+
+            <div className="stars">
+                {Array.from({ length: 35 }).map((_, i) => (
+                    <span
+                        key={i}
+                        className="star"
+                        style={{
+                            left: `${(i * 37) % 100}%`,
+                            top: `${(i * 61) % 100}%`,
+                            animationDelay: `${(i % 5) * 0.4}s`,
+                        }}
                     />
+                ))}
+            </div>
 
-                    <div className="flex-1 space-y-2">
-
-                      <div
-                        className="
-                          h-2
-                          w-14
-                          bg-blue-600/50
-                          rounded
-                        "
-                      />
-
-                      <div className="grid grid-cols-2 gap-1">
-
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-                        <div className="h-6 bg-white rounded shadow-sm" />
-
-                      </div>
-
+            <main className="layout">
+                <section className="login-section">
+                    <div className="brand">
+                        <div className="brand-icon">M</div>
+                        <div className="brand-name">MADINA ERP</div>
                     </div>
 
-                  </div>
+                    <h1 className="heading">
+                        Welcome
+                        <br />
+                        <span>Back Again.</span>
+                    </h1>
 
-                </div>
+                    <p className="subtitle">
+                        Sign in to continue your journey.
+                        <br />
+                        Your business workspace awaits.
+                    </p>
 
-              </div>
+                    <form onSubmit={handleSubmit}>
+                        <div className="field">
+                            <label>Email Address</label>
 
+                            <div className="input-wrap">
+                                <span className="input-icon">
+                                    <Mail size={18} />
+                                </span>
 
-              {/* laptop base */}
+                                <input
+                                    type="email"
+                                    placeholder="Enter your email"
+                                    value={email}
+                                    onChange={(e) => handleEmailChange(e.target.value)}
+                                    autoComplete="username"
+                                    required
+                                />
+                            </div>
+                        </div>
 
-              <div
-                className="
-                  w-[180px]
-                  h-[10px]
-                  -mt-1
-                  -ml-[15px]
-                  rounded-b-xl
-                  bg-gradient-to-b
-                  from-slate-500
-                  to-slate-700
-                  shadow-lg
-                "
-              />
+                        <div className="field">
+                            <label>Password</label>
 
-            </div>
+                            <div className="input-wrap">
+                                <span className="input-icon">
+                                    <Lock size={18} />
+                                </span>
 
-          </div>
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Enter your password"
+                                    value={password}
+                                    onChange={(e) => handlePasswordChange(e.target.value)}
+                                    onFocus={handlePasswordFocus}
+                                    onBlur={handlePasswordBlur}
+                                    autoComplete="current-password"
+                                    required
+                                />
 
+                                <button
+                                    type="button"
+                                    className="password-toggle"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff size={18} />
+                                    ) : (
+                                        <Eye size={18} />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
 
-          {/* ======================================
-              FOOTER
-          ======================================= */}
+                        <div className="form-options">
+                            <label className="remember">
+                                <input
+                                    type="checkbox"
+                                    checked={remember}
+                                    onChange={(e) => setRemember(e.target.checked)}
+                                />
+                                Remember me
+                            </label>
 
-          <div
-            className="
-              absolute
-              bottom-8
-              left-0
-              right-0
-              text-center
-              z-30
-            "
-          >
+                            <Link to="/forgot-password" className="text-link">
+                                Forgot Password?
+                            </Link>
+                        </div>
 
-            <div
-              className="
-                text-white
-                font-bold
-                text-lg
-              "
-            >
-              {character === "success"
-                ? "Access granted"
-                : "One platform. Complete control."}
-            </div>
+                        <button
+                            className="submit-btn"
+                            type="submit"
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                "Signing in..."
+                            ) : effect === "success" ? (
+                                "Login Successful ✓"
+                            ) : effect === "wrong" ? (
+                                "Try Again"
+                            ) : (
+                                "Sign In →"
+                            )}
+                        </button>
 
-            <div
-              className="
-                text-blue-200
-                text-xs
-                mt-1
-              "
-            >
-              Manage your business operations efficiently
-            </div>
+                        <div className="message" role="status">
+                            {message}
+                        </div>
+                    </form>
 
-          </div>
+                    <div className="register">
+                        <ShieldCheck
+                            size={14}
+                            style={{ verticalAlign: "middle", marginRight: 5 }}
+                        />
+                        Secure access to Madina ERP
+                    </div>
+                </section>
 
+                <section className="scene">
+                    <div className="scene-inner">
+                        <div className="orb" />
+
+                        <div className="orbit">
+                            <div className="orbit-dot" />
+                        </div>
+
+                        <div className="orbit two" />
+
+                        <div className="cube-wrap">
+                            <div className="cube">
+                                <div className="cube-face front" />
+                                <div className="cube-face back" />
+                                <div className="cube-face right" />
+                                <div className="cube-face left" />
+                                <div className="cube-face top" />
+                                <div className="cube-face bottom" />
+                            </div>
+                        </div>
+
+                        <div className="donut" />
+                        <div className="floating-ball" />
+                        <div className="mini-ball" />
+                    </div>
+
+                    <div className="scene-label">
+                        MADINA ERP · BUSINESS MANAGEMENT
+                    </div>
+                </section>
+            </main>
         </div>
-
-
-        {/* ========================================
-            LOGIN FORM
-        ========================================= */}
-
-        <div
-          className="
-            flex
-            items-center
-            justify-center
-            p-7
-            sm:p-12
-            lg:p-16
-            bg-white
-          "
-        >
-
-          <div
-            className="
-              w-full
-              max-w-[400px]
-            "
-          >
-
-            {/* mobile logo */}
-
-            <div
-              className="
-                lg:hidden
-                flex
-                items-center
-                gap-3
-                mb-10
-              "
-            >
-
-              <div
-                className="
-                  w-12
-                  h-12
-                  rounded-xl
-                  bg-[#0b2a5b]
-                  flex
-                  items-center
-                  justify-center
-                  shadow-lg
-                "
-              >
-                <Building2
-                  size={24}
-                  className="text-white"
-                />
-              </div>
-
-              <div>
-
-                <div
-                  className="
-                    text-xl
-                    font-black
-                    text-slate-900
-                  "
-                >
-                  Madina ERP
-                </div>
-
-                <div
-                  className="
-                    text-[10px]
-                    uppercase
-                    tracking-widest
-                    text-slate-400
-                  "
-                >
-                  Enterprise Management System
-                </div>
-
-              </div>
-
-            </div>
-
-
-            {/* heading */}
-
-            <div className="mb-9">
-
-              <div
-                className="
-                  inline-flex
-                  items-center
-                  gap-2
-                  px-3
-                  py-1.5
-                  rounded-full
-                  bg-blue-50
-                  text-blue-700
-                  text-xs
-                  font-bold
-                  mb-4
-                "
-              >
-                <ShieldCheck size={14} />
-
-                Secure Portal
-              </div>
-
-
-              <h1
-                className="
-                  text-[36px]
-                  leading-tight
-                  font-black
-                  tracking-tight
-                  text-slate-900
-                "
-              >
-                Welcome back
-              </h1>
-
-
-              <p
-                className="
-                  text-slate-500
-                  mt-3
-                  text-sm
-                  leading-6
-                "
-              >
-                Sign in to access your
-                <span className="font-semibold text-slate-700">
-                  {" "}Madina ERP
-                </span>
-                {" "}workspace.
-              </p>
-
-            </div>
-
-
-            {/* error */}
-
-            {error && (
-              <div
-                className="
-                  mb-5
-                  p-4
-                  rounded-xl
-                  bg-red-50
-                  border
-                  border-red-100
-                  text-red-600
-                  text-sm
-                  font-medium
-                  flex
-                  items-start
-                  gap-2
-                  animate-[assistantShake_.4s_ease-in-out]
-                "
-              >
-                <span className="text-base">
-                  !
-                </span>
-
-                <span>{error}</span>
-
-              </div>
-            )}
-
-
-            {/* FORM */}
-
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5"
-            >
-
-              {/* EMAIL */}
-
-              <div>
-
-                <label
-                  className="
-                    block
-                    text-sm
-                    font-semibold
-                    text-slate-700
-                    mb-2
-                  "
-                >
-                  Email address
-                </label>
-
-                <div className="relative">
-
-                  <Mail
-                    size={19}
-                    className="
-                      absolute
-                      left-4
-                      top-1/2
-                      -translate-y-1/2
-                      text-slate-400
-                    "
-                  />
-
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="Enter your email"
-                    value={form.email}
-                    onChange={handleEmailChange}
-                    className="
-                      w-full
-                      h-[52px]
-                      pl-12
-                      pr-4
-                      rounded-xl
-                      bg-slate-50
-                      border
-                      border-slate-200
-                      outline-none
-                      text-slate-800
-                      placeholder:text-slate-400
-                      transition-all
-                      focus:bg-white
-                      focus:border-blue-500
-                      focus:ring-4
-                      focus:ring-blue-500/10
-                    "
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* PASSWORD */}
-
-              <div>
-
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    mb-2
-                  "
-                >
-
-                  <label
-                    className="
-                      text-sm
-                      font-semibold
-                      text-slate-700
-                    "
-                  >
-                    Password
-                  </label>
-
-                  <Link
-                    to="/forgot-password"
-                    className="
-                      text-xs
-                      font-semibold
-                      text-blue-600
-                      hover:text-blue-700
-                      transition
-                    "
-                  >
-                    Forgot password?
-                  </Link>
-
-                </div>
-
-
-                <div className="relative">
-
-                  <Lock
-                    size={19}
-                    className="
-                      absolute
-                      left-4
-                      top-1/2
-                      -translate-y-1/2
-                      text-slate-400
-                    "
-                  />
-
-                  <input
-                    type={
-                      showPassword
-                        ? "text"
-                        : "password"
-                    }
-                    required
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onFocus={handlePasswordFocus}
-                    onBlur={handlePasswordBlur}
-                    onChange={(e) => {
-                      setForm({
-                        ...form,
-                        password: e.target.value,
-                      });
-
-                      setError("");
-                    }}
-                    className="
-                      w-full
-                      h-[52px]
-                      pl-12
-                      pr-12
-                      rounded-xl
-                      bg-slate-50
-                      border
-                      border-slate-200
-                      outline-none
-                      text-slate-800
-                      placeholder:text-slate-400
-                      transition-all
-                      focus:bg-white
-                      focus:border-blue-500
-                      focus:ring-4
-                      focus:ring-blue-500/10
-                    "
-                  />
-
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
-                    className="
-                      absolute
-                      right-4
-                      top-1/2
-                      -translate-y-1/2
-                      text-slate-400
-                      hover:text-blue-600
-                      transition
-                    "
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
-                  >
-                    {showPassword ? (
-                      <EyeOff size={19} />
-                    ) : (
-                      <Eye size={19} />
-                    )}
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* REMEMBER / SECURITY */}
-
-              <div
-                className="
-                  flex
-                  items-center
-                  gap-2
-                  text-xs
-                  text-slate-400
-                "
-              >
-                <ShieldCheck
-                  size={15}
-                  className="text-emerald-500"
-                />
-
-                Your account information is protected
-              </div>
-
-
-              {/* LOGIN BUTTON */}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="
-                  group
-                  relative
-                  w-full
-                  h-[54px]
-                  rounded-xl
-                  bg-[#0b2a5b]
-                  text-white
-                  font-bold
-                  overflow-hidden
-                  shadow-[0_10px_25px_rgba(11,42,91,.22)]
-                  hover:bg-[#123b73]
-                  hover:-translate-y-[1px]
-                  hover:shadow-[0_14px_30px_rgba(11,42,91,.28)]
-                  transition-all
-                  duration-300
-                  disabled:opacity-60
-                  disabled:hover:translate-y-0
-                "
-              >
-
-                <span
-                  className="
-                    absolute
-                    inset-0
-                    bg-gradient-to-r
-                    from-blue-600
-                    via-blue-500
-                    to-cyan-500
-                    translate-x-[-100%]
-                    group-hover:translate-x-0
-                    transition-transform
-                    duration-500
-                  "
-                />
-
-                <span
-                  className="
-                    relative
-                    flex
-                    items-center
-                    justify-center
-                    gap-2
-                  "
-                >
-
-                  {loading ? (
-                    <>
-                      <span
-                        className="
-                          w-5
-                          h-5
-                          rounded-full
-                          border-2
-                          border-white/30
-                          border-t-white
-                          animate-spin
-                        "
-                      />
-
-                      Signing in...
-                    </>
-                  ) : character === "success" ? (
-                    <>
-                      <CheckCircle2 size={19} />
-                      Access Granted
-                    </>
-                  ) : (
-                    <>
-                      Sign in to ERP
-
-                      <ArrowRight
-                        size={19}
-                        className="
-                          group-hover:translate-x-1
-                          transition
-                        "
-                      />
-                    </>
-                  )}
-
-                </span>
-
-              </button>
-
-            </form>
-
-            {/* FOOTER */}
-
-            <div
-              className="
-                mt-10
-                pt-5
-                border-t
-                border-slate-100
-                flex
-                items-center
-                justify-between
-                text-[11px]
-                text-slate-400
-              "
-            >
-
-              <span>
-                © {new Date().getFullYear()} Madina ERP
-              </span>
-
-              <span className="flex items-center gap-1">
-                <ShieldCheck size={13} />
-                Secure Login
-              </span>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-
-      {/* ============================================
-          ANIMATIONS
-      ============================================= */}
-
-      <style>
-        {`
-
-          @keyframes pageEnter {
-            from {
-              opacity: 0;
-              transform:
-                translateY(25px)
-                scale(.98);
-            }
-
-            to {
-              opacity: 1;
-              transform:
-                translateY(0)
-                scale(1);
-            }
-          }
-
-
-          @keyframes assistantFloat {
-            0%, 100% {
-              transform:
-                translateY(0)
-                rotate(0deg);
-            }
-
-            50% {
-              transform:
-                translateY(-12px)
-                rotate(1deg);
-            }
-          }
-
-
-          @keyframes assistantThinking {
-            0%, 100% {
-              transform:
-                translateY(0)
-                rotate(0deg);
-            }
-
-            50% {
-              transform:
-                translateY(-7px)
-                rotate(-3deg);
-            }
-          }
-
-
-          @keyframes assistantLoading {
-            0%, 100% {
-              transform:
-                translateY(0)
-                scale(1);
-            }
-
-            50% {
-              transform:
-                translateY(-14px)
-                scale(1.03);
-            }
-          }
-
-
-          @keyframes assistantShake {
-            0%, 100% {
-              transform:
-                translateX(0)
-                rotate(0deg);
-            }
-
-            20% {
-              transform:
-                translateX(-9px)
-                rotate(-2deg);
-            }
-
-            40% {
-              transform:
-                translateX(9px)
-                rotate(2deg);
-            }
-
-            60% {
-              transform:
-                translateX(-7px)
-                rotate(-2deg);
-            }
-
-            80% {
-              transform:
-                translateX(7px)
-                rotate(2deg);
-            }
-          }
-
-
-          @keyframes assistantCelebrate {
-            0%, 100% {
-              transform:
-                translateY(0)
-                rotate(0deg)
-                scale(1);
-            }
-
-            25% {
-              transform:
-                translateY(-20px)
-                rotate(-4deg)
-                scale(1.04);
-            }
-
-            50% {
-              transform:
-                translateY(-30px)
-                rotate(0deg)
-                scale(1.07);
-            }
-
-            75% {
-              transform:
-                translateY(-20px)
-                rotate(4deg)
-                scale(1.04);
-            }
-          }
-
-
-          @keyframes slowSpin {
-            from {
-              transform: rotate(0deg);
-            }
-
-            to {
-              transform: rotate(360deg);
-            }
-          }
-
-
-          @keyframes slowSpinReverse {
-            from {
-              transform: rotate(360deg);
-            }
-
-            to {
-              transform: rotate(0deg);
-            }
-          }
-
-
-          @keyframes orbitDot {
-            from {
-              transform:
-                rotate(0deg)
-                translateX(215px)
-                rotate(0deg);
-            }
-
-            to {
-              transform:
-                rotate(360deg)
-                translateX(215px)
-                rotate(-360deg);
-            }
-          }
-
-
-          @keyframes orbitDotReverse {
-            from {
-              transform:
-                rotate(360deg)
-                translateX(165px)
-                rotate(-360deg);
-            }
-
-            to {
-              transform:
-                rotate(0deg)
-                translateX(165px)
-                rotate(0deg);
-            }
-          }
-
-        `}
-      </style>
-
-    </div>
-  );
+    );
 }
-

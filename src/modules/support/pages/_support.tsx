@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
     ArrowLeft, RefreshCw, Headset, Ticket, Clock3, CheckCircle2,
-    AlertCircle, Search, Plus, Eye, UserRound, CalendarDays,
+    AlertCircle, Search, Plus, Eye, Pencil, UserRound, CalendarDays,
     MessageSquare, Send, LoaderCircle, ClipboardList, BarChart3,
 } from "lucide-react";
+
 import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
@@ -155,25 +157,91 @@ export function EmptyState({ title, detail }: { title: string; detail: string })
     return <div className="flex flex-col items-center justify-center px-4 py-14 text-center"><div className="mb-3 rounded-xl bg-slate-100 p-3 text-slate-500"><ClipboardList size={24} /></div><h3 className="font-semibold text-slate-800">{title}</h3><p className="mt-1 max-w-md text-sm text-slate-500">{detail}</p></div>;
 }
 
-export function TicketTable({ tickets, onView }: { tickets: SupportTicket[]; onView: (ticket: SupportTicket) => void }) {
-    if (!tickets.length) return <EmptyState title="No tickets found" detail="There are no tickets matching the current view." />;
+
+export function TicketTable({
+    tickets,
+    onView,
+    onEdit,
+}: {
+    tickets: SupportTicket[];
+    onView: (ticket: SupportTicket) => void;
+    onEdit?: (ticket: SupportTicket) => void;
+}) {
+    if (!tickets.length) {
+        return <EmptyState title="No tickets found" detail="There are no tickets matching the current view." />;
+    }
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-                    <tr>{["Ticket", "Subject", "Requester", "Assignee", "Priority", "Status", "Created", "Action"].map((item) => <th key={item} className="border-b border-slate-200 px-4 py-3 font-bold">{item}</th>)}</tr>
+                    <tr>
+                        {["Ticket", "Subject", "Requester", "Assignee", "Priority", "Status", "Created", "Action"].map((item) => (
+                            <th key={item} className="border-b border-slate-200 px-4 py-3 font-bold">
+                                {item}
+                            </th>
+                        ))}
+                    </tr>
                 </thead>
+
                 <tbody>
                     {tickets.map((ticket) => (
                         <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-indigo-700">{ticket.ticket_number}</td>
-                            <td className="max-w-[250px] px-4 py-3"><p className="truncate font-semibold text-slate-800">{ticket.subject}</p><p className="mt-1 text-xs text-slate-500">{formatLabel(ticket.issue_type)}{ticket.module_name ? ` · ${ticket.module_name}` : ""}</p></td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">{ticket.submitter?.name ?? `User #${ticket.submitted_by}`}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">{ticket.assignee?.name ?? "Unassigned"}</td>
-                            <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} /></td>
-                            <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatDate(ticket.created_at)}</td>
-                            <td className="px-4 py-3"><button type="button" onClick={() => onView(ticket)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"><Eye size={14} /> View</button></td>
+                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-indigo-700">
+                                {ticket.ticket_number}
+                            </td>
+
+                            <td className="max-w-[250px] px-4 py-3">
+                                <p className="truncate font-semibold text-slate-800">{ticket.subject}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    {formatLabel(ticket.issue_type)}
+                                    {ticket.module_name ? ` · ${ticket.module_name}` : ""}
+                                </p>
+                            </td>
+
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                {ticket.submitter?.name ?? `User #${ticket.submitted_by}`}
+                            </td>
+
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                {ticket.assignee?.name ?? "Unassigned"}
+                            </td>
+
+                            <td className="px-4 py-3">
+                                <PriorityBadge priority={ticket.priority} />
+                            </td>
+
+                            <td className="px-4 py-3">
+                                <StatusBadge status={ticket.status} />
+                            </td>
+
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-500">
+                                {formatDate(ticket.created_at)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => onView(ticket)}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                    >
+                                        <Eye size={14} />
+                                        View
+                                    </button>
+
+                                    {ticket.status === "open" && onEdit && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onEdit(ticket)}
+                                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                        >
+                                            <Pencil size={14} />
+                                            Edit
+                                        </button>
+                                    )}
+                                </div>
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -181,6 +249,7 @@ export function TicketTable({ tickets, onView }: { tickets: SupportTicket[]; onV
         </div>
     );
 }
+
 
 export function StatCard({ title, value, detail, icon, tone = "indigo" }: { title: string; value: number | string; detail: string; icon: ReactNode; tone?: "indigo" | "blue" | "amber" | "green" | "red" }) {
     const tones = {

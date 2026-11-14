@@ -5,6 +5,7 @@ import {
     Search,
     Settings,
     User,
+    Key,
     UserCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -23,6 +24,10 @@ export default function TopNav({
 
     const [openProfile, setOpenProfile] = useState(false);
     const [openSettings, setOpenSettings] = useState(false);
+    const [openChangePassword, setOpenChangePassword] = useState(false);
+
+
+    
 
     const profileRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +50,7 @@ export default function TopNav({
             ) {
                 setOpenProfile(false);
                 setOpenSettings(false);
+                setOpenChangePassword(false);
             }
 
         };
@@ -121,10 +127,10 @@ export default function TopNav({
                     <button
                         onClick={() => {
                             setOpenProfile(!openProfile);
+                            setOpenChangePassword(!openChangePassword);
+                            if (openProfile) {setOpenSettings(false);}
+                            if (openChangePassword) {setOpenChangePassword(false);}
 
-                            if (openProfile) {
-                                setOpenSettings(false);
-                            }
                         }}
                         className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg cursor-pointer transition"
                     >
@@ -150,7 +156,7 @@ export default function TopNav({
 
 
                     {/* PROFILE DROPDOWN */}
-                    {openProfile && (
+                    {openChangePassword && (
 
                         <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 z-[100]">
 
@@ -158,7 +164,7 @@ export default function TopNav({
                             <div className="px-3 py-3 border-b border-gray-100 mb-2">
 
                                 <p className="font-semibold text-gray-800">
-                                    Sawon
+                                    {getUser()?.name || "User"}
                                 </p>
 
                                 <p className="text-xs text-gray-500 mt-1">
@@ -167,114 +173,24 @@ export default function TopNav({
 
                             </div>
 
-
-                            {/* Profile */}
                             <button
                                 onClick={() => {
-                                    setOpenProfile(false);
-                                    navigate("/profile");
+                                    setOpenChangePassword(false);
+                                    navigate("/change-password");
                                 }}
                                 className="w-full px-3 py-2.5 hover:bg-gray-50 rounded-xl cursor-pointer flex items-center gap-3 transition text-left"
                             >
 
-                                <UserCircle
+                                <Key
                                     size={18}
                                     className="text-gray-500"
                                 />
 
                                 <span className="text-sm">
-                                    Profile
+                                    Change Password
                                 </span>
 
                             </button>
-
-
-                            {/* Settings */}
-                            <div>
-
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-
-                                        setOpenSettings(
-                                            !openSettings
-                                        );
-                                    }}
-                                    className="w-full px-3 py-2.5 hover:bg-gray-50 rounded-xl cursor-pointer flex items-center justify-between transition"
-                                >
-
-                                    <div className="flex items-center gap-3">
-
-                                        <Settings
-                                            size={18}
-                                            className="text-gray-500"
-                                        />
-
-                                        <span className="text-sm">
-                                            Settings
-                                        </span>
-
-                                    </div>
-
-                                    <ChevronDown
-                                        size={16}
-                                        className={`transition-transform duration-200 ${
-                                            openSettings
-                                                ? "rotate-180"
-                                                : ""
-                                        }`}
-                                    />
-
-                                </button>
-
-
-                                {/* Settings Submenu */}
-                                <div
-                                    className={`ml-8 mt-1 space-y-1 overflow-hidden transition-all duration-300 ${
-                                        openSettings
-                                            ? "max-h-40 opacity-100"
-                                            : "max-h-0 opacity-0"
-                                    }`}
-                                >
-
-                                    <button
-                                        onClick={() =>
-                                            navigate(
-                                                "/settings/account"
-                                            )
-                                        }
-                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg text-sm text-gray-600"
-                                    >
-                                        Account Settings
-                                    </button>
-
-
-                                    <button
-                                        onClick={() =>
-                                            navigate(
-                                                "/settings/security"
-                                            )
-                                        }
-                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg text-sm text-gray-600"
-                                    >
-                                        Security
-                                    </button>
-
-
-                                    <button
-                                        onClick={() =>
-                                            navigate(
-                                                "/settings/notifications"
-                                            )
-                                        }
-                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg text-sm text-gray-600"
-                                    >
-                                        Notification Settings
-                                    </button>
-
-                                </div>
-
-                            </div>
 
 
                             {/* Divider */}

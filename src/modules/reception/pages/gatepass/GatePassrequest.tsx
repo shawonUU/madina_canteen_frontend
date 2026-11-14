@@ -595,16 +595,6 @@ export default function GatePass() {
                             {row.original.requester?.name || "--"}
                         </p>
 
-                        {row.original.pending_approval && (
-                            <div className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                                <p className="font-semibold">
-                                    Level - {row.original.pending_approval.level}
-                                </p>
-                                <p>
-                                    {row.original.pending_approval.approver || "--"}
-                                </p>
-                            </div>
-                        )}
                     </div>
                 ),
             },
@@ -676,7 +666,19 @@ export default function GatePass() {
                     placeholder: "All statuses",
                 },
                 Cell: ({ row }) => (
-                    <StatusBadge status={row.original.status} />
+                    <div className="min-w-[120px]">
+                        <StatusBadge status={row.original.status} />
+                        {row.original.pending_approval && (
+                            <div className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                                <p className="font-semibold">
+                                    Level - {row.original.pending_approval.level}
+                                </p>
+                                <p>
+                                    {row.original.pending_approval.approver || "--"}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 ),
             },
             {

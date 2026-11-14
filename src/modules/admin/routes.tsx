@@ -9,6 +9,7 @@ import Role from "../admin/pages/access-controll/Role";
 const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const ChangePassword = lazy(() => import("./pages/auth/ChangePassword"));
 
 
 const Module = lazy(() => import("./pages/system-management/Module"));
@@ -30,6 +31,10 @@ const authRoutes = [
             {
                 path: "/forgot-password",
                 element: <ForgotPassword />,
+            },
+            {
+                path: "/change-password",
+                element: <ChangePassword />,
             },
 
             {

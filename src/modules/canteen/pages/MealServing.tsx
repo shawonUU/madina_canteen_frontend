@@ -39,7 +39,7 @@ interface MealType {
 
 interface MenuItem {
     id: number;
-    item_name?: string;
+    name?: string;
     item_type: "Main" | "Alternative";
     alternative_of: number | null;
 }
@@ -47,7 +47,7 @@ interface MenuItem {
 interface BookingItem {
     id: number;
     menu_item_id: number;
-    menuItem?: MenuItem;
+    menu_item?: MenuItem;
 }
 
 interface Booking {
@@ -61,13 +61,10 @@ interface Booking {
     menu_id: number | null;
     remarks?: string | null;
 
-    status:
-        | "Selected"
-        | "Served"
-        | "Cancelled";
+    status: "Selected" | "Served" | "Cancelled";
 
     employee?: Employee;
-    mealType?: MealType;
+    meal_type?: MealType;
     items?: BookingItem[];
 }
 
@@ -81,8 +78,7 @@ export default function MealServing() {
     const [openSidebar, setOpenSidebar] =
         useState(false);
 
-    const [bookings, setBookings] =
-        useState<Booking[]>([]);
+    const [bookings, setBookings] = useState<Booking[]>([]);
 
     const [loading, setLoading] =
         useState(true);
@@ -212,15 +208,11 @@ export default function MealServing() {
     // Item Name
     // -------------------------------------------------------------------------
 
-    const getItemName = (
-        item: BookingItem
-    ) => {
-
+    const getItemName = (item: BookingItem) => {
         return (
-            item.menuItem?.item_name ||
+            item.menu_item?.name ||
             `Item #${item.menu_item_id}`
         );
-
     };
 
 
@@ -381,7 +373,7 @@ export default function MealServing() {
 
 
             const mealType =
-                booking.mealType?.name
+                booking.meal_type?.name
                     ?.toLowerCase() || "";
 
 
@@ -1164,9 +1156,7 @@ export default function MealServing() {
                                                                                 />
 
                                                                                 {
-                                                                                    getItemName(
-                                                                                        item
-                                                                                    )
+                                                                                    getItemName(item)
                                                                                 }
 
                                                                             </span>

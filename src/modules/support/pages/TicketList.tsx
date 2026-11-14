@@ -51,7 +51,13 @@ export default function TicketList() {
                 </div>
             </div>
             <ErrorMessage message={error} onRetry={fetchTickets} />
-            {loading ? <LoadingState label="Loading tickets..." /> : <TicketTable tickets={tickets} onView={ticket => navigate(`/support/view-ticket/${ticket.id}`)} />}
+            {loading ? <LoadingState label="Loading tickets..." /> : 
+                  <TicketTable
+                        tickets={tickets}
+                        onView={ticket => navigate(`/support/view-ticket/${ticket.id}`)}
+                        onEdit={ticket => navigate(`/support/edit-ticket/${ticket.id}`)}
+                    />
+            }
             <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-slate-500"><span>Rows per page</span><select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }} className="rounded-md border border-slate-300 bg-white px-2 py-1.5"><option value={10}>10</option><option value={15}>15</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select><span>· {total} records</span></div><div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className={secondaryButtonClass}>Previous</button><span className="whitespace-nowrap text-slate-600">Page {page} of {lastPage}</span><button type="button" disabled={page >= lastPage || loading} onClick={() => setPage(p => p + 1)} className={secondaryButtonClass}>Next</button></div></div>
         </div>
     </SupportLayout>;
