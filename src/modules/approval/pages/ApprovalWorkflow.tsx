@@ -189,20 +189,20 @@ export default function ApprovalWorkflow() {
         }
     };
 
-    const fetchDepartments = async () => {
-        try {
-            const response = await api.get("/hrm/departments");
+    // const fetchDepartments = async () => {
+    //     try {
+    //         const response = await api.get("/hrm/departments");
 
-            if (response.data.success) {
-                setDepartments(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load departments:",
-                error
-            );
-        }
-    };
+    //         if (response.data.success) {
+    //             setDepartments(response.data.data);
+    //         }
+    //     } catch (error) {
+    //         console.error(
+    //             "Failed to load departments:",
+    //             error
+    //         );
+    //     }
+    // };
 
     const fetchMenus = async (moduleId: number) => {
         try {

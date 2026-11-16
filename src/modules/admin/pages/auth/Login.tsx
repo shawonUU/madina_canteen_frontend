@@ -4,14 +4,11 @@ import type { CSSProperties, FormEvent } from "react";
 import { login } from "../../services/authService";
 import { useNavigate, Link } from "react-router-dom";
 import {
-    ArrowRight,
     Eye,
     EyeOff,
     Lock,
     Mail,
     ShieldCheck,
-    Building2,
-    CheckCircle2,
 } from "lucide-react";
 
 type Effect = "normal" | "night" | "wrong" | "success";

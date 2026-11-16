@@ -1095,9 +1095,7 @@ export default function MealServing() {
                                                                     <p className="text-sm font-semibold text-gray-700">
 
                                                                         {
-                                                                            booking
-                                                                                .mealType
-                                                                                ?.name ||
+                                                                            booking.meal_type?.name ||
                                                                             `Meal #${booking.meal_type_id}`
                                                                         }
 

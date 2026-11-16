@@ -3,10 +3,8 @@ import {
     ChevronDown,
     LogOut,
     Search,
-    Settings,
     User,
     Key,
-    UserCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -128,7 +126,7 @@ export default function TopNav({
                         onClick={() => {
                             setOpenProfile(!openProfile);
                             setOpenChangePassword(!openChangePassword);
-                            if (openProfile) {setOpenSettings(false);}
+                            if (openSettings) {setOpenSettings(false);}
                             if (openChangePassword) {setOpenChangePassword(false);}
 
                         }}

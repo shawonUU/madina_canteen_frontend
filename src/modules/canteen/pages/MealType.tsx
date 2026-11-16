@@ -69,11 +69,11 @@ export default function MealTypePage() {
     loadMealTypes();
   }, []);
 
-  const openCreateModal = () => {
-    setEditId(null);
-    setForm({ ...initialForm });
-    setModalOpen(true);
-  };
+  // const openCreateModal = () => {
+  //   setEditId(null);
+  //   setForm({ ...initialForm });
+  //   setModalOpen(true);
+  // };
 
   const openEditModal = (item: MealType) => {
     setEditId(item.id);

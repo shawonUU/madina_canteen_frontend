@@ -160,7 +160,7 @@ export default function SideNav({
                     cachedModules = response.data.data;
 
                     if (!cancelled) {
-                        setModules(cachedModules);
+                        setModules(cachedModules ?? []);
                     }
                 }
             } catch (error) {

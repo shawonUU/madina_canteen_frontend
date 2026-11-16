@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, RefreshCw, Ticket, Plus, ArrowRight, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { api, ErrorMessage, LoadingState, normalizeList, PriorityBadge, StatCard, StatusBadge, SupportLayout, formatDate, secondaryButtonClass } from "./_support";
+import { api, ErrorMessage, LoadingState, PriorityBadge, StatCard, StatusBadge, SupportLayout, formatDate, secondaryButtonClass } from "./_support";
 
 import type { SupportTicket } from "./_support";
 

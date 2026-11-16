@@ -491,10 +491,7 @@ const MealSelection = () => {
     >
   >({});
 
-  const [
-    bookings,
-    setBookings,
-  ] = useState<Booking[]>([]);
+  const [ bookings, setBookings, ] = useState<Booking[]>([]);
 
   const [
     editingBooking,

@@ -32,7 +32,7 @@ import {
 
 import { ActionIcon, Tooltip } from "@mantine/core";
 import { IconFilter } from "@tabler/icons-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
@@ -402,7 +402,7 @@ export default function MeetingList() {
                                         : "subtle"
                                 }
                                 aria-label="Toggle column filters"
-                                onClick={(event) => {
+                                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                                     event.stopPropagation();
                                     table.setShowColumnFilters(
                                         !table.getState().showColumnFilters,

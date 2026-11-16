@@ -26,7 +26,7 @@ import {
     type MRT_SortingState,
 } from "mantine-react-table";
 
-import { ActionIcon, Tooltip } from "@mantine/core";
+import { ActionIcon } from "@mantine/core";
 import { IconFilter } from "@tabler/icons-react";
 
 import SideNav from "../../../components/side-nav";
@@ -435,7 +435,7 @@ export default function DesignationPage() {
                                     ? "filled"
                                     : "subtle"
                             }
-                            onClick={(event) => {
+                            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                                 event.stopPropagation();
                                 table.setShowColumnFilters(
                                     !table.getState().showColumnFilters,

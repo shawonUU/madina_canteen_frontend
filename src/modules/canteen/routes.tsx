@@ -1,7 +1,7 @@
 import ProtectedRoute from "../../app/router/ProtectedRoute";
 import MealType from "../canteen/pages/MealType";
-import Menu from "./pages/menu";
-import Booking from "./pages/booking";
+import Menu from "../canteen/pages/Menu";
+import Booking from "../canteen/pages/Booking";
 import MealServing from "../canteen/pages/MealServing";
 
 const dashboardRoutes = [

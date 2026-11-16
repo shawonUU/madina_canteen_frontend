@@ -118,13 +118,10 @@ export default function MeetingCalendar() {
     const startingDay = (firstDay.getDay() + 6) % 7;
 
     const calendarDays: (number | null)[] = [
-        ...Array.from<number | null>(
-            { length: startingDay },
-            () => null
-        ),
+        ...Array(startingDay).fill(null),
         ...Array.from(
             { length: daysInMonth },
-            (_, index) => index + 1
+            (_, index): number => index + 1
         ),
     ];
 

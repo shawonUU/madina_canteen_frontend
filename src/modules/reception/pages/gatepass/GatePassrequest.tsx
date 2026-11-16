@@ -539,13 +539,13 @@ export default function GatePass() {
                                         ? "filled"
                                         : "subtle"
                                 }
-                                onClick={(event) => {
-                                    event.stopPropagation();
+                                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                                        event.stopPropagation();
 
-                                    table.setShowColumnFilters(
-                                        !table.getState().showColumnFilters
-                                    );
-                                }}
+                                        table.setShowColumnFilters(
+                                            !table.getState().showColumnFilters
+                                        );
+                                    }}
                             >
                                 <IconFilter size={14} />
                             </ActionIcon>
