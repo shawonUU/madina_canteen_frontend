@@ -33,17 +33,9 @@ import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
 
-interface DepartmentOption {
-    id: number;
-    code: string | null;
-    name: string;
-    status?: "Active" | "Inactive";
-}
 
 interface Designation {
     id: number;
-    department_id: number;
-    department?: DepartmentOption | null;
     code: string | null;
     name: string;
     description: string | null;
@@ -52,7 +44,6 @@ interface Designation {
 }
 
 interface DesignationForm {
-    department_id: string;
     code: string;
     name: string;
     description: string;
@@ -67,7 +58,6 @@ interface ApiMeta {
 }
 
 const initialForm: DesignationForm = {
-    department_id: "",
     code: "",
     name: "",
     description: "",
@@ -142,7 +132,6 @@ function normalizeList<T>(responseData: any): {
 export default function DesignationPage() {
     const [openSidebar, setOpenSidebar] = useState(false);
     const [designations, setDesignations] = useState<Designation[]>([]);
-    const [departments, setDepartments] = useState<DepartmentOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [tableError, setTableError] = useState("");
@@ -196,31 +185,6 @@ export default function DesignationPage() {
         [columnFilters],
     );
 
-    const fetchDepartments = useCallback(async () => {
-        try {
-            const response = await api.get("/hrm/departments", {
-                params: {
-                    per_page: 100,
-                    sort_by: "name",
-                    sort_direction: "asc",
-                },
-            });
-
-            const result = normalizeList<DepartmentOption>(response.data);
-            setDepartments(
-                result.records.filter(
-                    (department) =>
-                        department.status === "Active" ||
-                        (form.department_id &&
-                            String(department.id) === form.department_id),
-                ),
-            );
-        } catch (error) {
-            console.error("Failed to load departments:", error);
-            setDepartments([]);
-        }
-    }, [form.department_id]);
-
     const fetchDesignations = useCallback(async () => {
         setLoading(true);
         setTableError("");
@@ -273,9 +237,6 @@ export default function DesignationPage() {
         void fetchDesignations();
     }, [fetchDesignations, refreshKey]);
 
-    useEffect(() => {
-        void fetchDepartments();
-    }, [fetchDepartments, refreshKey]);
 
     const refreshDesignations = () => {
         setRefreshing(true);
@@ -292,9 +253,6 @@ export default function DesignationPage() {
     const openEditModal = (designation: Designation) => {
         setEditingId(designation.id);
         setForm({
-            department_id: String(
-                designation.department_id ?? designation.department?.id ?? "",
-            ),
             code: designation.code ?? "",
             name: designation.name ?? "",
             description: designation.description ?? "",
@@ -316,11 +274,6 @@ export default function DesignationPage() {
         event.preventDefault();
         setFormError("");
 
-        if (!form.department_id) {
-            setFormError("Please select a department.");
-            return;
-        }
-
         if (!form.name.trim()) {
             setFormError("Please enter designation name.");
             return;
@@ -329,7 +282,6 @@ export default function DesignationPage() {
         setSaving(true);
 
         const payload = {
-            department_id: Number(form.department_id),
             code: form.code.trim() || null,
             name: form.name.trim(),
             description: form.description.trim() || null,
@@ -484,29 +436,6 @@ export default function DesignationPage() {
                 ),
             },
             {
-                id: "department_id",
-                accessorFn: (row) => row.department?.name ?? "",
-                header: "Department",
-                minSize: 180,
-                filterVariant: "select",
-                mantineFilterSelectProps: {
-                    data: departments.map((department) => ({
-                        label: department.name,
-                        value: String(department.id),
-                    })),
-                    clearable: true,
-                    placeholder: "All departments",
-                },
-                Cell: ({ row }) => (
-                    <div className="flex min-w-[150px] items-center gap-2">
-                        <Building2 size={15} className="shrink-0 text-slate-500" />
-                        <span className="font-medium text-slate-700">
-                            {row.original.department?.name || "--"}
-                        </span>
-                    </div>
-                ),
-            },
-            {
                 accessorKey: "description",
                 id: "description",
                 header: "Description",
@@ -570,7 +499,7 @@ export default function DesignationPage() {
                 ),
             },
         ],
-        [pagination.pageIndex, pagination.pageSize, deletingId, departments],
+        [pagination.pageIndex, pagination.pageSize, deletingId],
     );
 
     const table = useMantineReactTable({
@@ -612,7 +541,6 @@ export default function DesignationPage() {
                 "serial",
                 "code",
                 "name",
-                "department_id",
                 "description",
                 "status",
                 "actions",
@@ -691,7 +619,7 @@ export default function DesignationPage() {
                                 Designation Management
                             </h1>
                             <p className="mt-1 text-sm text-slate-500">
-                                Manage designations and assign them to departments.
+                                Manage designations.
                             </p>
                         </div>
 
@@ -797,7 +725,7 @@ export default function DesignationPage() {
                                 <p className="mt-1 text-xs text-slate-500">
                                     {editingId
                                         ? "Update designation information"
-                                        : "Add a designation to a department"}
+                                        : "Add a designation"}
                                 </p>
                             </div>
                             <button
@@ -825,42 +753,7 @@ export default function DesignationPage() {
                                     </h4>
 
                                     <div className="space-y-4">
-                                        <div>
-                                            <label className="mb-2 block text-sm font-semibold text-slate-800">
-                                                Department
-                                                <span className="ml-1 text-red-600">*</span>
-                                            </label>
-                                            <select
-                                                value={form.department_id}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        department_id: event.target.value,
-                                                    }))
-                                                }
-                                                required
-                                                className={inputClass}
-                                            >
-                                                <option value="">
-                                                    Select department
-                                                </option>
-                                                {departments.map((department) => (
-                                                    <option
-                                                        key={department.id}
-                                                        value={department.id}
-                                                    >
-                                                        {department.code
-                                                            ? `${department.name} (${department.code})`
-                                                            : department.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {departments.length === 0 && (
-                                                <p className="mt-1.5 text-xs text-amber-700">
-                                                    No active departments found. Create or activate a department first.
-                                                </p>
-                                            )}
-                                        </div>
+
 
                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                             <div>
@@ -936,7 +829,7 @@ export default function DesignationPage() {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={saving || departments.length === 0}
+                                    disabled={saving}
                                     className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {saving && <RefreshCw size={15} className="animate-spin" />}

@@ -9,29 +9,19 @@ import {
     Package,
     UsersRound,
     FileDown,
-    Search,
+    Filter,
+    FunnelX,
+    ChevronUp,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
 
 import {
     useCallback,
     useEffect,
-    useMemo,
     useState,
-    type FormEvent,
-    type ReactNode,
 } from "react";
-
-import {
-    MantineReactTable,
-    useMantineReactTable,
-    type MRT_ColumnDef,
-    type MRT_ColumnFiltersState,
-    type MRT_PaginationState,
-    type MRT_SortingState,
-} from "mantine-react-table";
-
-import { ActionIcon, Tooltip } from "@mantine/core";
-import { IconFilter } from "@tabler/icons-react";
 
 import SideNav from "../../../../components/side-nav";
 import TopNav from "../../../../components/top-nav";
@@ -39,7 +29,6 @@ import api from "../../../../services/api";
 
 interface GatePassItem {
     id?: number;
-    code: string;
     product_id: number | null;
     product_name: string;
     quantity: number;
@@ -51,9 +40,12 @@ interface GatePassItem {
 
 interface GatePassData {
     id: number;
-    code: string;
+    pass_no: string;
     gate_pass_type: "Person" | "Person With Material";
-    requester?: { id: number; name: string } | null;
+    requester?: {
+        id: number;
+        name: string;
+    };
     department_name: string;
     designation_name: string;
     purpose: string;
@@ -84,16 +76,42 @@ interface GatePassForm {
     items: GatePassItem[];
 }
 
-interface GatePassApiResponse {
-    success: boolean;
-    data: GatePassData[];
-    meta?: {
-        current_page: number;
-        per_page: number;
-        total: number;
-        last_page: number;
+interface GatePassFilters {
+    pass_no: string;
+    gate_pass_type: string;
+    requester: string;
+    department_name: string;
+    purpose: string;
+    expected_exit_at: string;
+    status: string;
+}
+
+interface PaginationData {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+}
+
+interface AuthUserResponse {
+    user: {
+        id: number;
+        name: string;
+        email: string;
+        employee?: {
+            id: number;
+            department_relation?: {
+                id: number;
+                name: string;
+            } | null;
+            designation_relation?: {
+                id: number;
+                name: string;
+            } | null;
+        } | null;
     };
-    message?: string;
 }
 
 const initialForm: GatePassForm = {
@@ -108,7 +126,6 @@ const initialForm: GatePassForm = {
 };
 
 const emptyItem: GatePassItem = {
-    code: "",
     product_id: null,
     product_name: "",
     quantity: 1,
@@ -118,13 +135,15 @@ const emptyItem: GatePassItem = {
     remarks: "",
 };
 
-const PAGE_SIZES = ["10", "25", "50", "100"];
-
-const inputClass =
-    "h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
-
-const secondaryButtonClass =
-    "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+const initialFilters: GatePassFilters = {
+    pass_no: "",
+    gate_pass_type: "",
+    requester: "",
+    department_name: "",
+    purpose: "",
+    expected_exit_at: "",
+    status: "",
+};
 
 export default function GatePass() {
     const [openSidebar, setOpenSidebar] = useState(false);
@@ -132,139 +151,356 @@ export default function GatePass() {
     const [gatePasses, setGatePasses] = useState<GatePassData[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [tableError, setTableError] = useState("");
-
-    const [totalRecords, setTotalRecords] = useState(0);
-    const [lastPage, setLastPage] = useState(1);
-
-    const [globalSearch, setGlobalSearch] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
-
-    const [columnFilters, setColumnFilters] =
-        useState<MRT_ColumnFiltersState>([]);
-
-    const [sorting, setSorting] = useState<MRT_SortingState>([
-        { id: "created_at", desc: true },
-    ]);
-
-    const [pagination, setPagination] = useState<MRT_PaginationState>({
-        pageIndex: 0,
-        pageSize: 25,
-    });
-
-    const [exitFrom, setExitFrom] = useState("");
-    const [exitTo, setExitTo] = useState("");
-    const [refreshKey, setRefreshKey] = useState(0);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
+
     const [form, setForm] = useState<GatePassForm>({
         ...initialForm,
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | Logged-in User Department & Designation
+    |--------------------------------------------------------------------------
+    */
+
+    const [userDepartment, setUserDepartment] = useState("");
+    const [userDesignation, setUserDesignation] = useState("");
+    const [userInfoLoading, setUserInfoLoading] = useState(true);
+
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(globalSearch.trim());
-            setPagination((previous) => ({
-                ...previous,
-                pageIndex: 0,
-            }));
-        }, 350);
+        const fetchUserInfo = async () => {
+            try {
+                setUserInfoLoading(true);
 
-        return () => clearTimeout(timer);
-    }, [globalSearch]);
+                const response = await api.get<AuthUserResponse>(
+                    "/auth/me"
+                );
 
-    const filterValues = useMemo(
-        () =>
-            Object.fromEntries(
-                columnFilters
-                    .filter(
-                        (filter) =>
-                            filter.value !== undefined &&
-                            String(filter.value).trim() !== "",
-                    )
-                    .map((filter) => [
-                        String(filter.id),
-                        String(filter.value).trim(),
-                    ]),
-            ),
-        [columnFilters],
+                const employee = response.data.user?.employee;
+
+                setUserDepartment(
+                    employee?.department_relation?.name || ""
+                );
+
+                setUserDesignation(
+                    employee?.designation_relation?.name || ""
+                );
+            } catch (error) {
+                console.error(
+                    "Failed to load logged-in user information:",
+                    error
+                );
+            } finally {
+                setUserInfoLoading(false);
+            }
+        };
+
+        void fetchUserInfo();
+    }, []);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Data Table States
+    |--------------------------------------------------------------------------
+    */
+
+    const [filters, setFilters] = useState<GatePassFilters>({
+        ...initialFilters,
+    });
+
+    const [page, setPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(100);
+
+    const [pagination, setPagination] = useState<PaginationData>({
+        current_page: 1,
+        last_page: 1,
+        per_page: 100,
+        total: 0,
+        from: null,
+        to: null,
+    });
+
+    const [sortField, setSortField] = useState<string | null>(null);
+    const [sortDirection, setSortDirection] = useState<
+        "asc" | "desc" | null
+    >(null);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Build Filter Options
+    |--------------------------------------------------------------------------
+    */
+
+    const buildFilterOptions = () => {
+        return [
+            {
+                relation_name: null,
+                field_name: "pass_no",
+                search_param: filters.pass_no,
+                action: null,
+                order_by: sortField === "pass_no" ? sortDirection : null,
+                date_from: null,
+                label: "Pass No",
+                filter_type: "input",
+            },
+            {
+                relation_name: null,
+                field_name: "gate_pass_type",
+                search_param: filters.gate_pass_type,
+                action: null,
+                order_by:
+                    sortField === "gate_pass_type"
+                        ? sortDirection
+                        : null,
+                date_from: null,
+                label: "Type",
+                filter_type: "input",
+            },
+            {
+                relation_name: "requester",
+                field_name: "name",
+                search_param: filters.requester,
+                action: null,
+                order_by: sortField === "requester" ? sortDirection : null,
+                date_from: null,
+                label: "Requested By",
+                filter_type: "input",
+            },
+            {
+                relation_name: null,
+                field_name: "department_name",
+                search_param: filters.department_name,
+                action: null,
+                order_by:
+                    sortField === "department_name"
+                        ? sortDirection
+                        : null,
+                date_from: null,
+                label: "Department",
+                filter_type: "input",
+            },
+            {
+                relation_name: null,
+                field_name: "purpose",
+                search_param: filters.purpose,
+                action: null,
+                order_by: sortField === "purpose" ? sortDirection : null,
+                date_from: null,
+                label: "Purpose",
+                filter_type: "input",
+            },
+            {
+                relation_name: null,
+                field_name: "expected_exit_at",
+                search_param: filters.expected_exit_at,
+                action: null,
+                order_by:
+                    sortField === "expected_exit_at"
+                        ? sortDirection
+                        : null,
+                date_from: null,
+                label: "Exit Time",
+                filter_type: "input",
+            },
+            {
+                relation_name: null,
+                field_name: "status",
+                search_param: filters.status,
+                action: null,
+                order_by: sortField === "status" ? sortDirection : null,
+                date_from: null,
+                label: "Status",
+                filter_type: "input",
+            },
+        ];
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Gate Passes
+    |--------------------------------------------------------------------------
+    */
+
+    const fetchGatePasses = useCallback(
+        async (isRefresh = false, requestedPage = page) => {
+            try {
+                if (isRefresh) {
+                    setRefreshing(true);
+                } else {
+                    setLoading(true);
+                }
+
+                const data = {
+                    business_unit: "MML",
+                    items_per_page: itemsPerPage,
+                    page: requestedPage,
+                    isFilter: true,
+                    filter_options: buildFilterOptions(),
+                };
+
+                const response = await api.get(
+                    "/reception/gate-passes",
+                    {
+                        params: {
+                            page: requestedPage,
+                            items_per_page: itemsPerPage,
+                            data: JSON.stringify(data),
+                        },
+                    }
+                );
+
+                if (response.data.success) {
+                    const result = response.data.data;
+
+                    if (
+                        result &&
+                        !Array.isArray(result) &&
+                        Array.isArray(result.data)
+                    ) {
+                        setGatePasses(result.data);
+
+                        setPagination({
+                            current_page:
+                                result.current_page || requestedPage,
+                            last_page: result.last_page || 1,
+                            per_page: result.per_page || itemsPerPage,
+                            total: result.total || 0,
+                            from: result.from || null,
+                            to: result.to || null,
+                        });
+                    } else if (Array.isArray(result)) {
+                        setGatePasses(result);
+
+                        setPagination({
+                            current_page: requestedPage,
+                            last_page: 1,
+                            per_page: itemsPerPage,
+                            total: result.length,
+                            from: result.length > 0 ? 1 : null,
+                            to: result.length > 0 ? result.length : null,
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to load gate passes:",
+                    error
+                );
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
+            }
+        },
+        [
+            page,
+            itemsPerPage,
+            filters,
+            sortField,
+            sortDirection,
+        ]
     );
 
-    const fetchGatePasses = useCallback(async () => {
-        setLoading(true);
-        setTableError("");
-
-        try {
-            const params: Record<string, string | number> = {
-                page: pagination.pageIndex + 1,
-                per_page: pagination.pageSize,
-                search: debouncedSearch,
-                sort_by: sorting[0]?.id ?? "created_at",
-                sort_dir: sorting[0]?.desc ? "desc" : "asc",
-            };
-
-            Object.entries(filterValues).forEach(([key, value]) => {
-                params[`filter[${key}]`] = value;
-            });
-
-            if (exitFrom) {
-                params["filter[exit_from]"] = exitFrom;
-            }
-
-            if (exitTo) {
-                params["filter[exit_to]"] = exitTo;
-            }
-
-            const response = await api.get<GatePassApiResponse>(
-                "/reception/gate-passes",
-                { params },
-            );
-
-            if (!response.data.success) {
-                throw new Error(
-                    response.data.message || "Failed to load gate passes.",
-                );
-            }
-
-            const records = response.data.data ?? [];
-            const meta = response.data.meta;
-
-            setGatePasses(records);
-            setTotalRecords(meta?.total ?? records.length);
-            setLastPage(meta?.last_page ?? 1);
-        } catch (error) {
-            console.error("Failed to load gate passes:", error);
-            setTableError("Failed to load gate passes. Please try again.");
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, [
-        pagination.pageIndex,
-        pagination.pageSize,
-        debouncedSearch,
-        sorting,
-        filterValues,
-        exitFrom,
-        exitTo,
-    ]);
+    /*
+    |--------------------------------------------------------------------------
+    | Initial Load + Debounced Filter
+    |--------------------------------------------------------------------------
+    */
 
     useEffect(() => {
-        void fetchGatePasses();
-    }, [fetchGatePasses, refreshKey]);
+        const timer = setTimeout(() => {
+            fetchGatePasses(false, page);
+        }, 500);
 
-    const refreshGatePasses = () => {
-        setRefreshing(true);
-        setRefreshKey((previous) => previous + 1);
+        return () => clearTimeout(timer);
+    }, [
+        filters,
+        sortField,
+        sortDirection,
+        itemsPerPage,
+        page,
+        fetchGatePasses,
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filter Change
+    |--------------------------------------------------------------------------
+    */
+
+    const handleFilterChange = (
+        field: keyof GatePassFilters,
+        value: string
+    ) => {
+        setFilters((prev) => ({
+            ...prev,
+            [field]: value,
+        }));
+
+        setPage(1);
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Clear Filters
+    |--------------------------------------------------------------------------
+    */
+
+    const clearFilters = () => {
+        setFilters({ ...initialFilters });
+        setSortField(null);
+        setSortDirection(null);
+        setPage(1);
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sorting
+    |--------------------------------------------------------------------------
+    */
+
+    const handleSort = (field: string) => {
+        let direction: "asc" | "desc" | null = "asc";
+
+        if (sortField === field) {
+            if (sortDirection === "asc") {
+                direction = "desc";
+            } else if (sortDirection === "desc") {
+                direction = null;
+            }
+        }
+
+        setSortField(direction ? field : null);
+        setSortDirection(direction);
+        setPage(1);
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create
+    |--------------------------------------------------------------------------
+    */
 
     const openCreateModal = () => {
         setEditingId(null);
-        setForm({ ...initialForm });
+
+        setForm({
+            ...initialForm,
+            department_name: userDepartment,
+            designation_name: userDesignation,
+            items: [],
+        });
+
         setModalOpen(true);
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Edit
+    |--------------------------------------------------------------------------
+    */
 
     const openEditModal = (gatePass: GatePassData) => {
         setEditingId(gatePass.id);
@@ -275,7 +511,7 @@ export default function GatePass() {
             designation_name: gatePass.designation_name || "",
             purpose: gatePass.purpose || "",
             expected_exit_at: formatDateTimeForInput(
-                gatePass.expected_exit_at,
+                gatePass.expected_exit_at
             ),
             expected_return_at: gatePass.expected_return_at
                 ? formatDateTimeForInput(gatePass.expected_return_at)
@@ -283,8 +519,8 @@ export default function GatePass() {
             remarks: gatePass.remarks || "",
             items:
                 gatePass.items?.map((item) => ({
-                    ...item,
-                    product_id: item.product_id ?? null,
+                    id: item.id,
+                    product_id: item.product_id,
                     product_name: item.product_name || "",
                     quantity: Number(item.quantity),
                     unit: item.unit || "Pcs",
@@ -297,70 +533,109 @@ export default function GatePass() {
         setModalOpen(true);
     };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Close Modal
+    |--------------------------------------------------------------------------
+    */
+
     const closeModal = () => {
         if (saving) return;
 
         setModalOpen(false);
         setEditingId(null);
-        setForm({ ...initialForm });
+
+        setForm({
+            ...initialForm,
+        });
     };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gate Pass Type
+    |--------------------------------------------------------------------------
+    */
+
     const handleTypeChange = (
-        type: "Person" | "Person With Material",
+        type: "Person" | "Person With Material"
     ) => {
-        setForm((previous) => ({
-            ...previous,
+        setForm((prev) => ({
+            ...prev,
             gate_pass_type: type,
             items:
                 type === "Person"
                     ? []
-                    : previous.items.length
-                      ? previous.items
-                      : [{ ...emptyItem }],
+                    : prev.items.length > 0
+                    ? prev.items
+                    : [{ ...emptyItem }],
         }));
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Add Item
+    |--------------------------------------------------------------------------
+    */
 
     const addItem = () => {
-        setForm((previous) => ({
-            ...previous,
-            items: [...previous.items, { ...emptyItem }],
+        setForm((prev) => ({
+            ...prev,
+            items: [...prev.items, { ...emptyItem }],
         }));
     };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Item
+    |--------------------------------------------------------------------------
+    */
+
     const removeItem = (index: number) => {
-        setForm((previous) => ({
-            ...previous,
-            items: previous.items.filter(
-                (_, itemIndex) => itemIndex !== index,
+        setForm((prev) => ({
+            ...prev,
+            items: prev.items.filter(
+                (_, itemIndex) => itemIndex !== index
             ),
         }));
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Item
+    |--------------------------------------------------------------------------
+    */
 
     const updateItem = (
         index: number,
         field: keyof GatePassItem,
-        value: string | number | null,
+        value: string | number | null
     ) => {
-        setForm((previous) => ({
-            ...previous,
-            items: previous.items.map((item, itemIndex) =>
+        setForm((prev) => ({
+            ...prev,
+            items: prev.items.map((item, itemIndex) =>
                 itemIndex === index
                     ? { ...item, [field]: value }
-                    : item,
+                    : item
             ),
         }));
     };
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    /*
+    |--------------------------------------------------------------------------
+    | Submit
+    |--------------------------------------------------------------------------
+    */
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
         if (!form.department_name.trim()) {
-            alert("Please enter department name.");
+            alert("Department information is not available.");
             return;
         }
 
         if (!form.designation_name.trim()) {
-            alert("Please enter designation name.");
+            alert("Designation information is not available.");
             return;
         }
 
@@ -380,15 +655,15 @@ export default function GatePass() {
                 return;
             }
 
-            if (
-                form.items.some(
-                    (item) =>
-                        !item.product_name.trim() ||
-                        Number(item.quantity) <= 0,
-                )
-            ) {
+            const invalidItem = form.items.some(
+                (item) =>
+                    !item.product_name.trim() ||
+                    Number(item.quantity) <= 0
+            );
+
+            if (invalidItem) {
                 alert(
-                    "Please enter valid product name and quantity for all items.",
+                    "Please enter valid product name and quantity for all items."
                 );
                 return;
             }
@@ -403,7 +678,8 @@ export default function GatePass() {
                 designation_name: form.designation_name.trim(),
                 purpose: form.purpose.trim(),
                 expected_exit_at: form.expected_exit_at,
-                expected_return_at: form.expected_return_at || null,
+                expected_return_at:
+                    form.expected_return_at || null,
                 remarks: form.remarks.trim() || null,
                 items:
                     form.gate_pass_type === "Person"
@@ -422,31 +698,42 @@ export default function GatePass() {
             if (editingId) {
                 await api.put(
                     `/reception/gate-passes/${editingId}`,
-                    data,
+                    data
                 );
             } else {
-                await api.post("/reception/gate-passes", data);
+                await api.post(
+                    "/reception/gate-passes",
+                    data
+                );
             }
 
             setModalOpen(false);
             setEditingId(null);
             setForm({ ...initialForm });
-            setRefreshKey((previous) => previous + 1);
+
+            await fetchGatePasses(true, page);
         } catch (error: any) {
             console.error("Failed to save gate pass:", error);
+
             alert(
                 error?.response?.data?.message ||
-                    "Failed to save gate pass.",
+                    "Failed to save gate pass."
             );
         } finally {
             setSaving(false);
         }
     };
 
+    /*
+    |--------------------------------------------------------------------------
+    | Delete
+    |--------------------------------------------------------------------------
+    */
+
     const handleDelete = async (id: number) => {
         if (
             !window.confirm(
-                "Are you sure you want to delete this gate pass?",
+                "Are you sure you want to delete this gate pass?"
             )
         ) {
             return;
@@ -454,29 +741,30 @@ export default function GatePass() {
 
         try {
             await api.delete(`/reception/gate-passes/${id}`);
-
-            if (gatePasses.length === 1 && pagination.pageIndex > 0) {
-                setPagination((previous) => ({
-                    ...previous,
-                    pageIndex: previous.pageIndex - 1,
-                }));
-            } else {
-                setRefreshKey((previous) => previous + 1);
-            }
+            await fetchGatePasses(true, page);
         } catch (error: any) {
             console.error("Failed to delete gate pass:", error);
+
             alert(
                 error?.response?.data?.message ||
-                    "Failed to delete gate pass.",
+                    "Failed to delete gate pass."
             );
         }
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | PDF
+    |--------------------------------------------------------------------------
+    */
 
     const handleDownloadPdf = async (id: number) => {
         try {
             const response = await api.get(
                 `/reception/gate-passes/${id}/pdf`,
-                { responseType: "blob" },
+                {
+                    responseType: "blob",
+                }
             );
 
             const blob = new Blob([response.data], {
@@ -495,519 +783,579 @@ export default function GatePass() {
 
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error("Failed to download gate pass PDF:", error);
+            console.error(
+                "Failed to download gate pass PDF:",
+                error
+            );
+
             alert("Failed to download gate pass PDF.");
         }
     };
 
-    const clearFilters = () => {
-        setGlobalSearch("");
-        setDebouncedSearch("");
-        setColumnFilters([]);
-        setExitFrom("");
-        setExitTo("");
-
-        setPagination((previous) => ({
-            ...previous,
-            pageIndex: 0,
-        }));
-    };
-
-    const hasFilters =
-        globalSearch.trim() !== "" ||
-        columnFilters.length > 0 ||
-        exitFrom !== "" ||
-        exitTo !== "";
-
-    const columns = useMemo<MRT_ColumnDef<GatePassData>[]>(
-        () => [
-            {
-                id: "serial",
-                header: "#",
-                size: 65,
-                maxSize: 65,
-                minSize: 65,
-                Header: ({ table }) => (
-                    <div className="flex items-center gap-1 whitespace-nowrap">
-                        <span>#</span>
-
-                        <Tooltip label="">
-                            <ActionIcon
-                                size="sm"
-                                variant={
-                                    table.getState().showColumnFilters
-                                        ? "filled"
-                                        : "subtle"
-                                }
-                                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                                        event.stopPropagation();
-
-                                        table.setShowColumnFilters(
-                                            !table.getState().showColumnFilters
-                                        );
-                                    }}
-                            >
-                                <IconFilter size={14} />
-                            </ActionIcon>
-                        </Tooltip>
-                    </div>
-                ),
-                Cell: ({ row }) =>
-                    (pagination.pageIndex * pagination.pageSize) + row.index + 1,
-                enableColumnFilter: false,
-                enableSorting: false,
-            },
-            {
-                accessorKey: "code",
-                id: "code",
-                header: "Pass No",
-                minSize: 130,
-            },
-            {
-                accessorKey: "gate_pass_type",
-                id: "gate_pass_type",
-                header: "Type",
-                minSize: 160,
-                filterVariant: "select",
-                mantineFilterSelectProps: {
-                    data: [
-                        { label: "Person", value: "Person" },
-                        {
-                            label: "Person With Material",
-                            value: "Person With Material",
-                        },
-                    ],
-                    clearable: true,
-                    placeholder: "All types",
-                },
-                Cell: ({ row }) => (
-                    <TypeBadge type={row.original.gate_pass_type} />
-                ),
-            },
-            {
-                id: "requester",
-                accessorFn: (row) => row.requester?.name ?? "",
-                header: "Requested By",
-                minSize: 180,
-                Cell: ({ row }) => (
-                    <div className="min-w-[140px]">
-                        <p className="font-semibold text-slate-800">
-                            {row.original.requester?.name || "--"}
-                        </p>
-
-                    </div>
-                ),
-            },
-            {
-                id: "department",
-                accessorFn: (row) => row.department_name ?? "",
-                header: "Department",
-                minSize: 150,
-                Cell: ({ row }) => (
-                    <div className="min-w-[120px]">
-                        <p className="font-medium text-slate-800">
-                            {row.original.department_name || "--"}
-                        </p>
-                    </div>
-                ),
-            },
-            {
-                id: "designation",
-                accessorFn: (row) => row.designation_name ?? "",
-                header: "Designation",
-                minSize: 150,
-                Cell: ({ row }) => (
-                    <div className="min-w-[120px]">
-                        <p className="text-xs text-slate-500">
-                            {row.original.designation_name || "--"}
-                        </p>
-                    </div>
-                ),
-            },
-            {
-                accessorKey: "purpose",
-                id: "purpose",
-                header: "Purpose",
-                minSize: 180,
-                Cell: ({ row }) => (
-                    <span className="block min-w-[140px] max-w-[230px] whitespace-normal">
-                        {row.original.purpose || "--"}
-                    </span>
-                ),
-            },
-            {
-                accessorKey: "expected_exit_at",
-                id: "expected_exit_at",
-                header: "Exit Time",
-                minSize: 180,
-                enableColumnFilter: true,
-                filterVariant: "date-range",
-                Cell: ({ row }) => (
-                    <span className="whitespace-nowrap">
-                        {formatDateTime(row.original.expected_exit_at)}
-                    </span>
-                ),
-            },
-            {
-                accessorKey: "status",
-                id: "status",
-                header: "Status",
-                minSize: 130,
-                filterVariant: "select",
-                mantineFilterSelectProps: {
-                    data: [
-                        "Pending",
-                        "Approved",
-                        "Rejected",
-                        "Cancelled",
-                        "Completed",
-                    ],
-                    clearable: true,
-                    placeholder: "All statuses",
-                },
-                Cell: ({ row }) => (
-                    <div className="min-w-[120px]">
-                        <StatusBadge status={row.original.status} />
-                        {row.original.pending_approval && (
-                            <div className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                                <p className="font-semibold">
-                                    Level - {row.original.pending_approval.level}
-                                </p>
-                                <p>
-                                    {row.original.pending_approval.approver || "--"}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                ),
-            },
-            {
-                id: "actions",
-                header: "Actions",
-                size: 130,
-                enableSorting: false,
-                enableColumnFilter: false,
-                Cell: ({ row }) => (
-                    <div className="flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                void handleDownloadPdf(row.original.id)
-                            }
-                            title="Download PDF"
-                            className="flex h-8 w-8 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                        >
-                            <FileDown size={15} />
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => openEditModal(row.original)}
-                            title="Edit"
-                            className="flex h-8 w-8 items-center justify-center rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                        >
-                            <Pencil size={15} />
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => void handleDelete(row.original.id)}
-                            title="Delete"
-                            className="flex h-8 w-8 items-center justify-center rounded border border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
-                        >
-                            <Trash2 size={15} />
-                        </button>
-                    </div>
-                ),
-            },
-        ],
-        [pagination.pageIndex, pagination.pageSize],
-    );
-
-    const columnOrder = [
-        "serial",
-        "code",
-        "gate_pass_type",
-        "requester",
-        "department",
-        "designation",
-        "purpose",
-        "expected_exit_at",
-        "status",
-        "actions",
-    ];
-
-    const table = useMantineReactTable({
-        columns,
-        data: gatePasses,
-
-        manualFiltering: true,
-        manualSorting: true,
-        manualPagination: true,
-
-        rowCount: totalRecords,
-        pageCount: lastPage,
-
-        enableColumnFilters: true,
-        enableGlobalFilter: false,
-        enableColumnFilterModes: false,
-        enableColumnActions: false,
-        enableHiding: false,
-        enableDensityToggle: false,
-        enableFullScreenToggle: false,
-
-        columnFilterDisplayMode: "subheader",
-        paginationDisplayMode: "default",
-        positionPagination: "bottom",
-
-        onColumnFiltersChange: (updater) => {
-            setColumnFilters((previous) =>
-                typeof updater === "function"
-                    ? updater(previous)
-                    : updater,
-            );
-
-            setPagination((previous) => ({
-                ...previous,
-                pageIndex: 0,
-            }));
-        },
-
-        onSortingChange: (updater) => {
-            setSorting((previous) =>
-                typeof updater === "function"
-                    ? updater(previous)
-                    : updater,
-            );
-
-            setPagination((previous) => ({
-                ...previous,
-                pageIndex: 0,
-            }));
-        },
-
-        onPaginationChange: setPagination,
-
-        state: {
-            columnFilters,
-            sorting,
-            pagination,
-            columnOrder,
-            isLoading: loading,
-            showProgressBars: refreshing,
-        },
-
-        mantineTableContainerProps: {
-            style: {
-                minWidth: "100%",
-                overflowX: "auto",
-            },
-        },
-
-        mantinePaperProps: {
-            shadow: "none",
-            radius: 0,
-            style: {
-                border: 0,
-            },
-        },
-
-        mantineTableProps: {
-            striped: true,
-            highlightOnHover: true,
-            withColumnBorders: true,
-            // withTableBorder: true,
-            style: {
-                borderColor: "#cbd5e1",
-            },
-        },
-
-        mantineTableHeadCellProps: {
-            style: {
-                backgroundColor: "#f1f5f9",
-                color: "#334155",
-                fontSize: "12px",
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                padding: "0px",
-                paddingLeft: "10px",
-                paddingTop: "10px",
-            },
-        },
-
-        mantineFilterTextInputProps: {
-            size: "xs",
-            variant: "default",
-            placeholder: "Search...",
-        },
-
-        mantineFilterSelectProps: {
-            size: "xs",
-            variant: "default",
-        },
-
-        mantinePaginationProps: {
-            rowsPerPageOptions: PAGE_SIZES,
-            showRowsPerPage: true,
-        },
-
-        localization: {
-            noRecordsToDisplay: "No gate passes found",
-            rowsPerPage: "Rows per page",
-        },
-    });
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
 
     return (
-        <div className="flex min-h-screen bg-slate-100">
+        <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-indigo-100 flex">
             <SideNav
                 openSidebar={openSidebar}
                 setOpenSidebar={setOpenSidebar}
             />
 
-            <main className="min-w-0 flex-1">
+            <main className="flex-1 min-w-0">
                 <TopNav
                     openSidebar={openSidebar}
                     setOpenSidebar={setOpenSidebar}
                 />
 
-                <div className="h-[calc(100vh-64px)] overflow-y-auto p-3 sm:p-4 lg:p-6">
-                    <div className="mb-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="p-4 lg:p-6 overflow-y-auto h-[calc(100vh-64px)]">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div>
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                <ShieldCheck size={16} />
-                                <span>Reception</span>
-                                <span>/</span>
-                                <span className="font-semibold text-slate-800">
-                                    Gate Pass
-                                </span>
-                            </div>
-
-                            <h1 className="mt-2 text-2xl font-bold text-slate-900">
+                            <h2 className="text-2xl lg:text-3xl font-extrabold text-gray-800">
                                 Gate Pass
-                            </h1>
+                            </h2>
 
-                            <p className="mt-1 text-sm text-slate-500">
-                                Manage and track gate pass requests.
+                            <p className="text-gray-500 mt-1 text-sm">
+                                Manage Person and material gate pass requests.
                             </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
                             <button
                                 type="button"
-                                onClick={refreshGatePasses}
-                                disabled={refreshing || loading}
-                                className={secondaryButtonClass}
+                                onClick={() => fetchGatePasses(true, page)}
+                                disabled={refreshing}
+                                className="w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-600 hover:text-indigo-600 hover:border-indigo-200 transition disabled:opacity-50"
+                                title="Refresh"
                             >
                                 <RefreshCw
-                                    size={16}
-                                    className={refreshing ? "animate-spin" : ""}
+                                    size={17}
+                                    className={
+                                        refreshing ? "animate-spin" : ""
+                                    }
                                 />
-                                Refresh
                             </button>
 
                             <button
                                 type="button"
                                 onClick={openCreateModal}
-                                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
-                                <Plus size={17} />
+                                <Plus size={18} />
                                 Add Gate Pass
                             </button>
                         </div>
                     </div>
 
-                    <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
-                        <div className="flex flex-col gap-3 border-b border-slate-300 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <h2 className="font-bold text-slate-900">
+                                <h3 className="text-lg font-bold text-gray-800">
                                     Gate Pass List
-                                </h2>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    {totalRecords.toLocaleString()} total records
+                                </h3>
+
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    All gate pass requests
                                 </p>
                             </div>
 
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                                <div className="relative sm:w-72">
-                                    <Search
-                                        size={16}
-                                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={globalSearch}
-                                        onChange={(event) =>
-                                            setGlobalSearch(event.target.value)
-                                        }
-                                        placeholder="Search all gate passes..."
-                                        className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                                    />
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">
+                                    Records:
+                                </span>
 
-                                    {globalSearch && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setGlobalSearch("")}
-                                            aria-label="Clear search"
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-600"
-                                        >
-                                            <X size={15} />
-                                        </button>
-                                    )}
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={clearFilters}
-                                    disabled={!hasFilters}
-                                    className={secondaryButtonClass}
+                                <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => {
+                                        setItemsPerPage(
+                                            Number(e.target.value)
+                                        );
+                                        setPage(1);
+                                    }}
+                                    className="h-8 px-2 rounded-md border border-gray-200 bg-white text-xs text-gray-600 focus:outline-none focus:border-indigo-400"
                                 >
-                                    <X size={15} />
-                                    Clear filters
-                                </button>
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
                             </div>
                         </div>
 
-                        {tableError && (
-                            <div className="flex flex-col gap-2 border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
-                                <span>{tableError}</span>
-                                <button
-                                    type="button"
-                                    onClick={refreshGatePasses}
-                                    className="font-semibold underline"
-                                >
-                                    Try again
-                                </button>
-                            </div>
-                        )}
+                        {loading ? (
+                            <div className="py-20 text-center">
+                                <RefreshCw
+                                    size={30}
+                                    className="mx-auto animate-spin text-indigo-600"
+                                />
 
-                        <MantineReactTable table={table} />
+                                <p className="mt-3 text-sm text-gray-500">
+                                    Loading gate passes...
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[1250px]">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 w-14">
+                                                    #
+                                                </th>
+
+                                                <SortableHeader
+                                                    title="Pass No"
+                                                    field="pass_no"
+                                                    sortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={handleSort}
+                                                />
+
+                                                <SortableHeader
+                                                    title="Type"
+                                                    field="gate_pass_type"
+                                                    sortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={handleSort}
+                                                />
+
+                                                <SortableHeader
+                                                    title="Requested By"
+                                                    field="requester"
+                                                    sortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={handleSort}
+                                                />
+
+                                                <SortableHeader
+                                                    title="Department"
+                                                    field="department_name"
+                                                    sortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={handleSort}
+                                                />
+
+                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">
+                                                    Purpose
+                                                </th>
+
+                                                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">
+                                                    Exit Time
+                                                </th>
+
+                                                <SortableHeader
+                                                    title="Status"
+                                                    field="status"
+                                                    sortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={handleSort}
+                                                />
+
+                                                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
+                                                    Action
+                                                </th>
+                                            </tr>
+
+                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                <th className="px-3 py-1.5">
+                                                    <div className="flex items-center justify-center">
+                                                        <Filter
+                                                            size={15}
+                                                            className="text-gray-400"
+                                                        />
+                                                    </div>
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={filters.pass_no}
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "pass_no",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={
+                                                            filters.gate_pass_type
+                                                        }
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "gate_pass_type",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={filters.requester}
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "requester",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={
+                                                            filters.department_name
+                                                        }
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "department_name",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={filters.purpose}
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "purpose",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={
+                                                            filters.expected_exit_at
+                                                        }
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "expected_exit_at",
+                                                                value
+                                                            )
+                                                        }
+                                                        placeholder="YYYY-MM-DD"
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <TableFilterInput
+                                                        value={filters.status}
+                                                        onChange={(value) =>
+                                                            handleFilterChange(
+                                                                "status",
+                                                                value
+                                                            )
+                                                        }
+                                                    />
+                                                </th>
+
+                                                <th className="px-3 py-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={clearFilters}
+                                                        title="Clear Filters"
+                                                        className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-red-500 transition"
+                                                    >
+                                                        <FunnelX size={18} />
+                                                    </button>
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody className="divide-y divide-gray-100">
+                                            {gatePasses.length === 0 ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={9}
+                                                        className="py-16 text-center"
+                                                    >
+                                                        <ShieldCheck
+                                                            size={32}
+                                                            className="mx-auto text-gray-300"
+                                                        />
+
+                                                        <p className="mt-3 font-semibold text-gray-600">
+                                                            No gate passes found
+                                                        </p>
+
+                                                        <p className="mt-1 text-xs text-gray-400">
+                                                            Try changing your filters.
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                gatePasses.map(
+                                                    (gatePass, index) => (
+                                                        <tr
+                                                            key={gatePass.id}
+                                                            className="hover:bg-gray-50 transition"
+                                                        >
+                                                            <td className="px-3 py-3 text-xs text-gray-500">
+                                                                {(pagination.current_page -
+                                                                    1) *
+                                                                    pagination.per_page +
+                                                                    index +
+                                                                    1}
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <span className="text-sm font-semibold text-indigo-600 whitespace-nowrap">
+                                                                    {
+                                                                        gatePass.pass_no
+                                                                    }
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <TypeBadge
+                                                                    type={
+                                                                        gatePass.gate_pass_type
+                                                                    }
+                                                                />
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                                                    {gatePass
+                                                                        .requester
+                                                                        ?.name ||
+                                                                        "--"}
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-gray-700">
+                                                                        {
+                                                                            gatePass.department_name
+                                                                        }
+                                                                    </p>
+
+                                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                                        {
+                                                                            gatePass.designation_name
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <span className="text-sm text-gray-600">
+                                                                    {
+                                                                        gatePass.purpose
+                                                                    }
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <span className="text-sm text-gray-600 whitespace-nowrap">
+                                                                    {formatDateTime(
+                                                                        gatePass.expected_exit_at
+                                                                    )}
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <div className="space-y-1">
+                                                                    <StatusBadge
+                                                                        status={
+                                                                            gatePass.status
+                                                                        }
+                                                                    />
+
+                                                                    {gatePass.pending_approval && (
+                                                                        <div className="text-xs text-gray-500">
+                                                                            <p className="font-semibold text-gray-600">
+                                                                                Level -{" "}
+                                                                                {
+                                                                                    gatePass
+                                                                                        .pending_approval
+                                                                                        .level
+                                                                                }
+                                                                            </p>
+
+                                                                            <p>
+                                                                                {gatePass
+                                                                                    .pending_approval
+                                                                                    .approver ||
+                                                                                    "--"}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-3 py-3">
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            handleDownloadPdf(
+                                                                                gatePass.id
+                                                                            )
+                                                                        }
+                                                                        className="w-8 h-8 rounded-lg text-green-600 hover:bg-green-50 flex items-center justify-center transition"
+                                                                        title="Download PDF"
+                                                                    >
+                                                                        <FileDown
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                        />
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            openEditModal(
+                                                                                gatePass
+                                                                            )
+                                                                        }
+                                                                        className="w-8 h-8 rounded-lg text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <Pencil
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                        />
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            handleDelete(
+                                                                                gatePass.id
+                                                                            )
+                                                                        }
+                                                                        className="w-8 h-8 rounded-lg text-red-600 hover:bg-red-50 flex items-center justify-center transition"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <Trash2
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                        />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                )
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {pagination.total > 0 && (
+                                    <div className="px-4 py-3 border-t border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div className="text-xs text-gray-500">
+                                            Showing{" "}
+                                            <span className="font-semibold text-gray-700">
+                                                {pagination.from}
+                                            </span>{" "}
+                                            to{" "}
+                                            <span className="font-semibold text-gray-700">
+                                                {pagination.to}
+                                            </span>{" "}
+                                            of{" "}
+                                            <span className="font-semibold text-gray-700">
+                                                {pagination.total}
+                                            </span>{" "}
+                                            records
+                                        </div>
+
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                disabled={page <= 1}
+                                                onClick={() =>
+                                                    setPage((prev) =>
+                                                        Math.max(1, prev - 1)
+                                                    )
+                                                }
+                                                className="h-8 px-3 rounded-md border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                <ChevronLeft size={14} />
+                                                Previous
+                                            </button>
+
+                                            <div className="h-8 min-w-8 px-2 rounded-md bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center">
+                                                {pagination.current_page}
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                disabled={
+                                                    page >=
+                                                    pagination.last_page
+                                                }
+                                                onClick={() =>
+                                                    setPage((prev) =>
+                                                        Math.min(
+                                                            pagination.last_page,
+                                                            prev + 1
+                                                        )
+                                                    )
+                                                }
+                                                className="h-8 px-3 rounded-md border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                Next
+                                                <ChevronRight size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             </main>
 
+            {/* Modal */}
             {modalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-3 sm:p-5">
-                    <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl">
-                        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900">
-                                    {editingId
-                                        ? "Update Gate Pass"
-                                        : "Create Gate Pass"}
-                                </h3>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    {editingId
-                                        ? "Update gate pass information"
-                                        : "Create a new gate pass request"}
-                                </p>
+                <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
+                    <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                    <ShieldCheck
+                                        size={20}
+                                        className="text-indigo-600"
+                                    />
+                                </div>
+
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800">
+                                        {editingId
+                                            ? "Update Gate Pass"
+                                            : "Create Gate Pass"}
+                                    </h3>
+
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        {editingId
+                                            ? "Update gate pass information"
+                                            : "Create a new gate pass request"}
+                                    </p>
+                                </div>
                             </div>
 
                             <button
                                 type="button"
                                 onClick={closeModal}
                                 disabled={saving}
-                                aria-label="Close modal"
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                                className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition disabled:opacity-50"
                             >
                                 <X size={18} />
                             </button>
@@ -1015,19 +1363,25 @@ export default function GatePass() {
 
                         <form
                             onSubmit={handleSubmit}
-                            className="flex min-h-0 flex-col"
+                            className="flex flex-col min-h-0"
                         >
-                            <div className="space-y-5 overflow-y-auto bg-slate-50 p-4 sm:p-5">
-                                <section className="rounded-lg border border-slate-300 bg-white p-4">
-                                    <label className="mb-3 block text-sm font-semibold text-slate-800">
+                            <div className="p-6 overflow-y-auto space-y-6">
+                                {/* Gate Pass Type */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
                                         Gate Pass Type
-                                        <span className="ml-1 text-red-600">*</span>
+                                        <span className="text-red-500 ml-1">
+                                            *
+                                        </span>
                                     </label>
 
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <TypeOption
-                                            active={form.gate_pass_type === "Person"}
-                                            icon={<UserRound size={19} />}
+                                            active={
+                                                form.gate_pass_type ===
+                                                "Person"
+                                            }
+                                            icon={<UserRound size={20} />}
                                             title="Person"
                                             description="Person only"
                                             onClick={() =>
@@ -1040,318 +1394,416 @@ export default function GatePass() {
                                                 form.gate_pass_type ===
                                                 "Person With Material"
                                             }
-                                            icon={<UsersRound size={19} />}
+                                            icon={<UsersRound size={20} />}
                                             title="Person With Material"
-                                            description="Person carrying materials or assets"
+                                            description="Person with material"
                                             onClick={() =>
                                                 handleTypeChange(
-                                                    "Person With Material",
+                                                    "Person With Material"
                                                 )
                                             }
                                         />
                                     </div>
-                                </section>
+                                </div>
 
-                                <section className="rounded-lg border border-slate-300 bg-white p-4">
-                                    <h4 className="mb-4 border-b border-slate-200 pb-3 text-sm font-bold text-slate-900">
-                                        Request Information
-                                    </h4>
+                                {/* Request Information */}
+                                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <UserRound
+                                            size={17}
+                                            className="text-indigo-600"
+                                        />
 
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <FormField label="Department" required>
+                                        <h4 className="text-sm font-bold text-gray-800">
+                                            Request Information
+                                        </h4>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Department */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Department
+                                                <span className="text-red-500 ml-1">
+                                                    *
+                                                </span>
+                                            </label>
+
                                             <input
                                                 type="text"
-                                                value={form.department_name}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        department_name:
-                                                            event.target.value,
-                                                    }))
+                                                value={
+                                                    userInfoLoading
+                                                        ? "Loading department..."
+                                                        : form.department_name
                                                 }
-                                                placeholder="Enter department"
-                                                className={inputClass}
+                                                readOnly
+                                                placeholder="Department not assigned"
+                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-100 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none cursor-not-allowed"
                                             />
-                                        </FormField>
+                                        </div>
 
-                                        <FormField label="Designation" required>
+                                        {/* Designation */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Designation
+                                                <span className="text-red-500 ml-1">
+                                                    *
+                                                </span>
+                                            </label>
+
                                             <input
                                                 type="text"
-                                                value={form.designation_name}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        designation_name:
-                                                            event.target.value,
-                                                    }))
+                                                value={
+                                                    userInfoLoading
+                                                        ? "Loading designation..."
+                                                        : form.designation_name
                                                 }
-                                                placeholder="Enter designation"
-                                                className={inputClass}
+                                                readOnly
+                                                placeholder="Designation not assigned"
+                                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-100 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none cursor-not-allowed"
                                             />
-                                        </FormField>
+                                        </div>
 
-                                        <FormField label="Purpose" required>
-                                            <input
-                                                type="text"
-                                                value={form.purpose}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        purpose: event.target.value,
-                                                    }))
-                                                }
-                                                placeholder="Enter purpose"
-                                                className={inputClass}
-                                            />
-                                        </FormField>
+                                        <FormInput
+                                            label="Purpose"
+                                            required
+                                            value={form.purpose}
+                                            onChange={(value) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    purpose: value,
+                                                }))
+                                            }
+                                            placeholder="Official Work"
+                                        />
 
-                                        <FormField label="Expected Exit" required>
-                                            <input
-                                                type="datetime-local"
-                                                value={form.expected_exit_at}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        expected_exit_at:
-                                                            event.target.value,
-                                                    }))
-                                                }
-                                                className={inputClass}
-                                            />
-                                        </FormField>
+                                        <FormInput
+                                            label="Expected Exit"
+                                            required
+                                            type="datetime-local"
+                                            value={form.expected_exit_at}
+                                            onChange={(value) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    expected_exit_at: value,
+                                                }))
+                                            }
+                                        />
 
-                                        <FormField label="Expected Return">
-                                            <input
-                                                type="datetime-local"
-                                                value={form.expected_return_at}
-                                                onChange={(event) =>
-                                                    setForm((previous) => ({
-                                                        ...previous,
-                                                        expected_return_at:
-                                                            event.target.value,
-                                                    }))
-                                                }
-                                                className={inputClass}
-                                            />
-                                        </FormField>
+                                        <FormInput
+                                            label="Expected Return"
+                                            type="datetime-local"
+                                            value={form.expected_return_at}
+                                            onChange={(value) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    expected_return_at: value,
+                                                }))
+                                            }
+                                        />
                                     </div>
 
                                     <div className="mt-4">
-                                        <label className="mb-2 block text-sm font-semibold text-slate-800">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Remarks
                                         </label>
+
                                         <textarea
                                             value={form.remarks}
-                                            onChange={(event) =>
-                                                setForm((previous) => ({
-                                                    ...previous,
-                                                    remarks: event.target.value,
+                                            onChange={(e) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    remarks:
+                                                        e.target.value,
                                                 }))
                                             }
                                             rows={3}
-                                            placeholder="Enter additional remarks..."
-                                            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                            placeholder="Additional remarks..."
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"
                                         />
                                     </div>
-                                </section>
+                                </div>
 
-                                {form.gate_pass_type ===
-                                    "Person With Material" && (
-                                    <section className="overflow-hidden rounded-lg border border-slate-300 bg-white">
-                                        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                                            <div>
-                                                <h4 className="text-sm font-bold text-slate-900">
-                                                    Material Items
-                                                </h4>
-                                                <p className="mt-1 text-xs text-slate-500">
-                                                    Add products or assets being taken outside
-                                                </p>
+                                {/* Materials */}
+                                {form.gate_pass_type !== "Person" && (
+                                    <div className="rounded-2xl border border-gray-100 bg-white">
+                                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Package
+                                                    size={17}
+                                                    className="text-indigo-600"
+                                                />
+
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-800">
+                                                        Material Items
+                                                    </h4>
+
+                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                        Products or assets being
+                                                        taken outside
+                                                    </p>
+                                                </div>
                                             </div>
 
                                             <button
                                                 type="button"
                                                 onClick={addItem}
-                                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700"
+                                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition"
                                             >
-                                                <Plus size={15} />
+                                                <Plus size={16} />
                                                 Add Item
                                             </button>
                                         </div>
 
-                                        <div className="space-y-4 p-4">
+                                        <div className="p-5 space-y-4">
                                             {form.items.length === 0 ? (
-                                                <div className="border border-dashed border-slate-300 p-6 text-center">
+                                                <div className="py-8 text-center border border-dashed border-gray-200 rounded-xl">
                                                     <Package
-                                                        size={25}
-                                                        className="mx-auto text-slate-400"
+                                                        size={28}
+                                                        className="mx-auto text-gray-300"
                                                     />
-                                                    <p className="mt-2 text-sm font-semibold text-slate-700">
-                                                        No material items added
+
+                                                    <p className="mt-2 text-sm text-gray-500">
+                                                        No material items added.
                                                     </p>
                                                 </div>
                                             ) : (
-                                                form.items.map((item, index) => (
-                                                    <div
-                                                        key={item.id ?? index}
-                                                        className="rounded-lg border border-slate-300 p-4"
-                                                    >
-                                                        <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2">
-                                                            <h5 className="text-sm font-bold text-slate-800">
-                                                                Item {index + 1}
-                                                            </h5>
+                                                form.items.map(
+                                                    (item, index) => (
+                                                        <div
+                                                            key={index}
+                                                            className="p-4 rounded-2xl border border-gray-100 bg-gray-50/60"
+                                                        >
+                                                            <div className="flex items-center justify-between mb-4">
+                                                                <p className="text-sm font-bold text-gray-700">
+                                                                    Item{" "}
+                                                                    {index + 1}
+                                                                </p>
 
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    removeItem(index)
-                                                                }
-                                                                aria-label={`Remove item ${index + 1}`}
-                                                                className="flex h-8 w-8 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50"
-                                                            >
-                                                                <Trash2 size={15} />
-                                                            </button>
-                                                        </div>
-
-                                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                                            <div className="md:col-span-2">
-                                                                <FormField
-                                                                    label="Product / Material"
-                                                                    required
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        removeItem(
+                                                                            index
+                                                                        )
+                                                                    }
+                                                                    className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition"
                                                                 >
+                                                                    <Trash2
+                                                                        size={
+                                                                            15
+                                                                        }
+                                                                    />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                <div className="lg:col-span-2">
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Product /
+                                                                        Material
+                                                                        <span className="text-red-500 ml-1">
+                                                                            *
+                                                                        </span>
+                                                                    </label>
+
                                                                     <input
                                                                         type="text"
-                                                                        value={item.product_name}
-                                                                        onChange={(event) =>
+                                                                        value={
+                                                                            item.product_name
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
                                                                             updateItem(
                                                                                 index,
                                                                                 "product_name",
-                                                                                event.target.value,
+                                                                                e
+                                                                                    .target
+                                                                                    .value
                                                                             )
                                                                         }
-                                                                        placeholder="Enter product or material"
-                                                                        className={inputClass}
+                                                                        placeholder="Laptop"
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
-                                                                </FormField>
-                                                            </div>
+                                                                </div>
 
-                                                            <FormField label="Quantity">
-                                                                <input
-                                                                    type="number"
-                                                                    min="0.01"
-                                                                    step="0.01"
-                                                                    value={item.quantity}
-                                                                    onChange={(event) =>
-                                                                        updateItem(
-                                                                            index,
-                                                                            "quantity",
-                                                                            Number(event.target.value),
-                                                                        )
-                                                                    }
-                                                                    className={inputClass}
-                                                                />
-                                                            </FormField>
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Quantity
+                                                                    </label>
 
-                                                            <FormField label="Unit">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.unit}
-                                                                    onChange={(event) =>
-                                                                        updateItem(
-                                                                            index,
-                                                                            "unit",
-                                                                            event.target.value,
-                                                                        )
-                                                                    }
-                                                                    placeholder="Pcs"
-                                                                    className={inputClass}
-                                                                />
-                                                            </FormField>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0.01"
+                                                                        step="0.01"
+                                                                        value={
+                                                                            item.quantity
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
+                                                                            updateItem(
+                                                                                index,
+                                                                                "quantity",
+                                                                                Number(
+                                                                                    e
+                                                                                        .target
+                                                                                        .value
+                                                                                )
+                                                                            )
+                                                                        }
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                    />
+                                                                </div>
 
-                                                            <FormField label="Asset No">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.asset_no}
-                                                                    onChange={(event) =>
-                                                                        updateItem(
-                                                                            index,
-                                                                            "asset_no",
-                                                                            event.target.value,
-                                                                        )
-                                                                    }
-                                                                    placeholder="Asset number"
-                                                                    className={inputClass}
-                                                                />
-                                                            </FormField>
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Unit
+                                                                    </label>
 
-                                                            <FormField label="Serial No">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.serial_no}
-                                                                    onChange={(event) =>
-                                                                        updateItem(
-                                                                            index,
-                                                                            "serial_no",
-                                                                            event.target.value,
-                                                                        )
-                                                                    }
-                                                                    placeholder="Serial number"
-                                                                    className={inputClass}
-                                                                />
-                                                            </FormField>
-
-                                                            <div className="md:col-span-2 lg:col-span-3">
-                                                                <FormField label="Item Remarks">
                                                                     <input
                                                                         type="text"
-                                                                        value={item.remarks}
-                                                                        onChange={(event) =>
+                                                                        value={
+                                                                            item.unit
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
+                                                                            updateItem(
+                                                                                index,
+                                                                                "unit",
+                                                                                e
+                                                                                    .target
+                                                                                    .value
+                                                                            )
+                                                                        }
+                                                                        placeholder="Pcs"
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                    />
+                                                                </div>
+
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Asset No
+                                                                    </label>
+
+                                                                    <input
+                                                                        type="text"
+                                                                        value={
+                                                                            item.asset_no
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
+                                                                            updateItem(
+                                                                                index,
+                                                                                "asset_no",
+                                                                                e
+                                                                                    .target
+                                                                                    .value
+                                                                            )
+                                                                        }
+                                                                        placeholder="IT-LAP-025"
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                    />
+                                                                </div>
+
+                                                                <div>
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Serial No
+                                                                    </label>
+
+                                                                    <input
+                                                                        type="text"
+                                                                        value={
+                                                                            item.serial_no
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
+                                                                            updateItem(
+                                                                                index,
+                                                                                "serial_no",
+                                                                                e
+                                                                                    .target
+                                                                                    .value
+                                                                            )
+                                                                        }
+                                                                        placeholder="Serial number"
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                                    />
+                                                                </div>
+
+                                                                <div className="md:col-span-2 lg:col-span-3">
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-2">
+                                                                        Item
+                                                                        Remarks
+                                                                    </label>
+
+                                                                    <input
+                                                                        type="text"
+                                                                        value={
+                                                                            item.remarks
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
                                                                             updateItem(
                                                                                 index,
                                                                                 "remarks",
-                                                                                event.target.value,
+                                                                                e
+                                                                                    .target
+                                                                                    .value
                                                                             )
                                                                         }
-                                                                        placeholder="Optional remarks"
-                                                                        className={inputClass}
+                                                                        placeholder="Item remarks"
+                                                                        className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
-                                                                </FormField>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ))
+                                                    )
+                                                )
                                             )}
                                         </div>
-                                    </section>
+                                    </div>
                                 )}
                             </div>
 
-                            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-white px-5 py-4">
+                            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 shrink-0">
                                 <button
                                     type="button"
                                     onClick={closeModal}
                                     disabled={saving}
-                                    className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    className="px-5 h-11 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-100 transition disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
 
                                 <button
                                     type="submit"
-                                    disabled={saving}
-                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={
+                                        saving ||
+                                        userInfoLoading ||
+                                        !form.department_name ||
+                                        !form.designation_name
+                                    }
+                                    className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm transition disabled:opacity-60"
                                 >
                                     {saving ? (
                                         <>
                                             <RefreshCw
-                                                size={15}
+                                                size={16}
                                                 className="animate-spin"
                                             />
                                             Saving...
                                         </>
                                     ) : editingId ? (
-                                        "Update Gate Pass"
+                                        "Update"
                                     ) : (
-                                        "Create Gate Pass"
+                                        "Create"
                                     )}
                                 </button>
                             </div>
@@ -1363,25 +1815,137 @@ export default function GatePass() {
     );
 }
 
-function FormField({
+/*
+|--------------------------------------------------------------------------
+| Table Filter Input
+|--------------------------------------------------------------------------
+*/
+
+function TableFilterInput({
+    value,
+    onChange,
+    placeholder = "",
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+}) {
+    return (
+        <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full h-8 px-2.5 rounded-md border border-gray-200 bg-white text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+        />
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Sortable Header
+|--------------------------------------------------------------------------
+*/
+
+function SortableHeader({
+    title,
+    field,
+    sortField,
+    sortDirection,
+    onSort,
+}: {
+    title: string;
+    field: string;
+    sortField: string | null;
+    sortDirection: "asc" | "desc" | null;
+    onSort: (field: string) => void;
+}) {
+    const active = sortField === field;
+
+    return (
+        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">
+            <button
+                type="button"
+                onClick={() => onSort(field)}
+                className="inline-flex items-center gap-1 hover:text-indigo-600 transition"
+            >
+                {title}
+
+                {!active && (
+                    <span className="inline-flex flex-col text-gray-300">
+                        <ChevronUp size={11} />
+                        <ChevronDown
+                            size={11}
+                            className="-mt-1"
+                        />
+                    </span>
+                )}
+
+                {active && sortDirection === "asc" && (
+                    <ChevronUp
+                        size={14}
+                        className="text-indigo-600"
+                    />
+                )}
+
+                {active && sortDirection === "desc" && (
+                    <ChevronDown
+                        size={14}
+                        className="text-indigo-600"
+                    />
+                )}
+            </button>
+        </th>
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Form Input
+|--------------------------------------------------------------------------
+*/
+
+function FormInput({
     label,
     required = false,
-    children,
+    type = "text",
+    value,
+    onChange,
+    placeholder = "",
 }: {
     label: string;
     required?: boolean;
-    children: ReactNode;
+    type?: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
 }) {
     return (
         <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-800">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
                 {label}
-                {required && <span className="ml-1 text-red-600">*</span>}
+
+                {required && (
+                    <span className="text-red-500 ml-1">*</span>
+                )}
             </label>
-            {children}
+
+            <input
+                type={type}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            />
         </div>
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Type Option
+|--------------------------------------------------------------------------
+*/
 
 function TypeOption({
     active,
@@ -1391,7 +1955,7 @@ function TypeOption({
     onClick,
 }: {
     active: boolean;
-    icon: ReactNode;
+    icon: React.ReactNode;
     title: string;
     description: string;
     onClick: () => void;
@@ -1400,28 +1964,35 @@ function TypeOption({
         <button
             type="button"
             onClick={onClick}
-            className={`rounded-lg border p-4 text-left transition ${
+            className={`text-left p-4 rounded-2xl border transition ${
                 active
                     ? "border-indigo-500 bg-indigo-50"
-                    : "border-slate-300 bg-white hover:bg-slate-50"
+                    : "border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/40"
             }`}
         >
             <div className="flex items-center gap-3">
                 <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                         active
                             ? "bg-indigo-600 text-white"
-                            : "bg-slate-100 text-slate-600"
+                            : "bg-gray-100 text-gray-500"
                     }`}
                 >
                     {icon}
                 </div>
 
                 <div>
-                    <p className="text-sm font-semibold text-slate-800">
+                    <p
+                        className={`text-sm font-bold ${
+                            active
+                                ? "text-indigo-700"
+                                : "text-gray-700"
+                        }`}
+                    >
                         {title}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+
+                    <p className="text-xs text-gray-400 mt-0.5">
                         {description}
                     </p>
                 </div>
@@ -1430,23 +2001,39 @@ function TypeOption({
     );
 }
 
+/*
+|--------------------------------------------------------------------------
+| Type Badge
+|--------------------------------------------------------------------------
+*/
+
 function TypeBadge({
     type,
 }: {
     type: "Person" | "Person With Material";
 }) {
-    return type === "Person" ? (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800">
-            <UserRound size={13} />
-            Person
-        </span>
-    ) : (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-800">
-            <UsersRound size={13} />
+    if (type === "Person") {
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-semibold whitespace-nowrap">
+                <UserRound size={12} />
+                Person
+            </span>
+        );
+    }
+
+    return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-xs font-semibold whitespace-nowrap">
+            <UsersRound size={12} />
             Person + Material
         </span>
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Status Badge
+|--------------------------------------------------------------------------
+*/
 
 function StatusBadge({
     status,
@@ -1458,31 +2045,59 @@ function StatusBadge({
         | "Cancelled"
         | "Completed";
 }) {
-    const classNames: Record<string, string> = {
-        Pending: "border-amber-200 bg-amber-50 text-amber-800",
-        Approved: "border-emerald-200 bg-emerald-50 text-emerald-800",
-        Rejected: "border-red-200 bg-red-50 text-red-800",
-        Cancelled: "border-slate-300 bg-slate-100 text-slate-700",
-        Completed: "border-blue-200 bg-blue-50 text-blue-800",
+    const config = {
+        Pending: {
+            label: "Pending",
+            className:
+                "bg-yellow-50 text-yellow-700 border-yellow-100",
+        },
+        Approved: {
+            label: "Approved",
+            className:
+                "bg-green-50 text-green-700 border-green-100",
+        },
+        Rejected: {
+            label: "Rejected",
+            className:
+                "bg-red-50 text-red-700 border-red-100",
+        },
+        Cancelled: {
+            label: "Cancelled",
+            className:
+                "bg-gray-50 text-gray-600 border-gray-200",
+        },
+        Completed: {
+            label: "Completed",
+            className:
+                "bg-blue-50 text-blue-700 border-blue-100",
+        },
     };
+
+    const item = config[status];
 
     return (
         <span
-            className={`inline-flex whitespace-nowrap rounded border px-2 py-1 text-xs font-semibold ${
-                classNames[status] ?? classNames.Pending
-            }`}
+            className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold whitespace-nowrap ${item.className}`}
         >
-            {status}
+            {item.label}
         </span>
     );
 }
 
-function formatDateTime(value: string | null | undefined) {
+/*
+|--------------------------------------------------------------------------
+| Date Time
+|--------------------------------------------------------------------------
+*/
+
+function formatDateTime(value: string) {
     if (!value) return "--";
 
     const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) return value;
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
 
     return date.toLocaleString("en-GB", {
         day: "2-digit",
@@ -1493,7 +2108,13 @@ function formatDateTime(value: string | null | undefined) {
     });
 }
 
-function formatDateTimeForInput(value: string | null | undefined) {
+/*
+|--------------------------------------------------------------------------
+| Date Time For Input
+|--------------------------------------------------------------------------
+*/
+
+function formatDateTimeForInput(value: string) {
     if (!value) return "";
 
     const date = new Date(value);

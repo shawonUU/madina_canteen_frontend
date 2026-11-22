@@ -16,25 +16,33 @@ import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
 
-interface Role {
-  id: number;
-  name: string;
-}
 
 interface User {
   id: number;
   name: string;
   email: string;
   status: "Active" | "Inactive";
-  roles?: Role[];
+}
+
+interface Department {
+  id: number;
+  name: string;
+}
+
+interface Designation {
+  id: number;
+  name: string;
+  department_id: number;
 }
 
 interface Employee {
   id: number;
-  employee_code: string;
+  code: string;
   name: string;
-  department?: string | null;
-  designation?: string | null;
+  department: number | null;
+  designation: number | null;
+  department_relation?: Department | null;
+  designation_relation?: Designation | null;
   phone?: string | null;
   email?: string | null;
   status: "Active" | "Inactive";
@@ -58,7 +66,6 @@ interface EmployeeForm {
   status: "Active" | "Inactive";
   create_user: boolean;
   user_password: string;
-  role_id: string;
 }
 
 const initialForm: EmployeeForm = {
@@ -71,12 +78,12 @@ const initialForm: EmployeeForm = {
   status: "Active",
   create_user: false,
   user_password: "",
-  role_id: "",
 };
 
 export default function EmployeeList() {
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [roles, setRoles] = useState<Role[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [designations, setDesignations] = useState<Designation[]>([]);
 
     const [form, setForm] = useState<EmployeeForm>(initialForm);
 
@@ -85,7 +92,8 @@ export default function EmployeeList() {
     const [openModal, setOpenModal] = useState(false);
 
     const [loading, setLoading] = useState(false);
-    const [rolesLoading, setRolesLoading] = useState(false);
+    const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [designationsLoading, setDesignationsLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -179,26 +187,56 @@ export default function EmployeeList() {
     };
   };
 
-  const normalizeRolesResponse = (responseData: any): Role[] => {
+  const normalizeListResponse = (responseData: any) => {
     if (Array.isArray(responseData)) {
       return responseData;
     }
 
-    if (
-      responseData &&
-      Array.isArray(responseData.data)
-    ) {
+    if (Array.isArray(responseData?.data)) {
       return responseData.data;
     }
 
-    if (
-      responseData?.data &&
-      Array.isArray(responseData.data.data)
-    ) {
+    if (Array.isArray(responseData?.data?.data)) {
       return responseData.data.data;
     }
 
     return [];
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      setDepartmentsLoading(true);
+
+      const response = await api.get("/hrm/departments");
+      setDepartments(normalizeListResponse(response.data));
+    } catch (error) {
+      console.error("Failed to fetch departments:", error);
+      setDepartments([]);
+    } finally {
+      setDepartmentsLoading(false);
+    }
+  };
+
+  const fetchDesignations = async (departmentId: string) => {
+    if (!departmentId) {
+      setDesignations([]);
+      return;
+    }
+
+    try {
+      setDesignationsLoading(true);
+
+      const response = await api.get("/hrm/designations", {
+        params: { department_id: departmentId },
+      });
+
+      setDesignations(normalizeListResponse(response.data));
+    } catch (error) {
+      console.error("Failed to fetch designations:", error);
+      setDesignations([]);
+    } finally {
+      setDesignationsLoading(false);
+    }
   };
 
   const fetchEmployees = async (page = 1) => {
@@ -239,32 +277,14 @@ export default function EmployeeList() {
     }
   };
 
-  const fetchRoles = async () => {
-    try {
-      setRolesLoading(true);
 
-      const response = await api.get("/roles");
-
-      const normalizedRoles = normalizeRolesResponse(
-        response.data
-      );
-
-      setRoles(normalizedRoles);
-    } catch (error) {
-      console.error("Failed to fetch roles:", error);
-
-      setRoles([]);
-    } finally {
-      setRolesLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchEmployees(1);
   }, [search, statusFilter]);
 
   useEffect(() => {
-    fetchRoles();
+    fetchDepartments();
   }, []);
 
   const openCreateModal = () => {
@@ -272,32 +292,33 @@ export default function EmployeeList() {
     setForm({
       ...initialForm,
     });
+    setDesignations([]);
     setOpenModal(true);
   };
 
   const openEditModal = (employee: Employee) => {
     const user = employee.user;
 
-    const assignedRole =
-      user?.roles && user.roles.length > 0
-        ? user.roles[0]
-        : null;
 
     setEditId(employee.id);
 
     setForm({
       name: employee.name || "",
-      department: employee.department || "",
-      designation: employee.designation || "",
+      employee_code: employee.code || "",
+      department: employee.department ? String(employee.department) : "",
+      designation: employee.designation ? String(employee.designation) : "",
       phone: employee.phone || "",
       email: employee.email || "",
       status: employee.status || "Active",
       create_user: !!user,
       user_password: "",
-      role_id: assignedRole
-        ? String(assignedRole.id)
-        : "",
     });
+
+    if (employee.department) {
+      fetchDesignations(String(employee.department));
+    } else {
+      setDesignations([]);
+    }
 
     setOpenModal(true);
   };
@@ -326,6 +347,16 @@ export default function EmployeeList() {
     }));
   };
 
+  const handleDepartmentChange = (departmentId: string) => {
+    setForm((previous) => ({
+      ...previous,
+      department: departmentId,
+      designation: "",
+    }));
+
+    fetchDesignations(departmentId);
+  };
+
   const validateForm = () => {
     if (!form.name.trim()) {
       alert("Employee name is required.");
@@ -342,13 +373,6 @@ export default function EmployeeList() {
       return false;
     }
 
-    if (
-      form.create_user &&
-      !form.role_id
-    ) {
-      alert("Please select a role.");
-      return false;
-    }
 
     if (
       !editId &&
@@ -389,10 +413,8 @@ export default function EmployeeList() {
 
       const payload: Record<string, unknown> = {
         name: form.name.trim(),
-        department:
-          form.department.trim() || null,
-        designation:
-          form.designation.trim() || null,
+        department: form.department ? Number(form.department) : null,
+        designation: form.designation ? Number(form.designation) : null,
         phone:
           form.phone.trim() || null,
         email:
@@ -402,7 +424,6 @@ export default function EmployeeList() {
       };
 
       if (form.create_user) {
-        payload.role_id = Number(form.role_id);
 
         if (form.user_password.trim()) {
           payload.user_password =
@@ -764,7 +785,7 @@ export default function EmployeeList() {
 
                                   <div className="mt-0.5 text-xs font-medium text-indigo-600">
                                     {
-                                      employee.employee_code
+                                      employee.code
                                     }
                                   </div>
                                 </div>
@@ -773,14 +794,14 @@ export default function EmployeeList() {
 
                             <td className="px-5 py-4">
                               <span className="text-sm text-slate-600">
-                                {employee.department ||
+                                {employee.department_relation?.name ||
                                   "-"}
                               </span>
                             </td>
 
                             <td className="px-5 py-4">
                               <span className="text-sm text-slate-600">
-                                {employee.designation ||
+                                {employee.designation_relation?.name ||
                                   "-"}
                               </span>
                             </td>
@@ -812,21 +833,6 @@ export default function EmployeeList() {
                                     Enabled
                                   </div>
 
-                                  <div className="mt-1 text-xs text-slate-400">
-                                    {employee
-                                      .user
-                                      .roles &&
-                                    employee
-                                      .user
-                                      .roles
-                                      .length >
-                                      0
-                                      ? employee
-                                          .user
-                                          .roles[0]
-                                          .name
-                                      : "No role"}
-                                  </div>
                                 </div>
                               ) : (
                                 <span className="text-sm text-slate-400">
@@ -1084,18 +1090,23 @@ export default function EmployeeList() {
                       Department
                     </label>
 
-                    <input
-                      type="text"
+                    <select
                       value={form.department}
                       onChange={(event) =>
-                        handleChange(
-                          "department",
-                          event.target.value
-                        )
+                        handleDepartmentChange(event.target.value)
                       }
-                      placeholder="Enter department"
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                    />
+                      disabled={departmentsLoading}
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">
+                        {departmentsLoading ? "Loading departments..." : "Select Department"}
+                      </option>
+                      {departments.map((department) => (
+                        <option key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Designation */}
@@ -1104,18 +1115,27 @@ export default function EmployeeList() {
                       Designation
                     </label>
 
-                    <input
-                      type="text"
+                    <select
                       value={form.designation}
                       onChange={(event) =>
-                        handleChange(
-                          "designation",
-                          event.target.value
-                        )
+                        handleChange("designation", event.target.value)
                       }
-                      placeholder="Enter designation"
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
-                    />
+                      disabled={!form.department || designationsLoading}
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">
+                        {!form.department
+                          ? "Select Department First"
+                          : designationsLoading
+                            ? "Loading designations..."
+                            : "Select Designation"}
+                      </option>
+                      {designations.map((designation) => (
+                        <option key={designation.id} value={String(designation.id)}>
+                          {designation.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Phone */}
@@ -1207,50 +1227,7 @@ export default function EmployeeList() {
 
                   {form.create_user && (
                     <div className="mt-5 grid grid-cols-1 gap-5 border-t border-slate-200 pt-5 md:grid-cols-2">
-                      {/* Role */}
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-slate-700">
-                          Role{" "}
-                          <span className="text-red-500">
-                            *
-                          </span>
-                        </label>
 
-                        <select
-                          value={form.role_id}
-                          onChange={(event) =>
-                            handleChange(
-                              "role_id",
-                              event.target.value
-                            )
-                          }
-                          disabled={
-                            rolesLoading
-                          }
-                          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                        >
-                          <option value="">
-                            {rolesLoading
-                              ? "Loading roles..."
-                              : "Select role"}
-                          </option>
-
-                          {roles.map(
-                            (role) => (
-                              <option
-                                key={
-                                  role.id
-                                }
-                                value={
-                                  role.id
-                                }
-                              >
-                                {role.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </div>
 
                       {/* Password */}
                       <div>

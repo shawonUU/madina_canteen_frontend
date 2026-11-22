@@ -933,7 +933,7 @@ export default function Login() {
                             <label>Email Address</label>
 
                             <div className="input-wrap">
-                                <span className="input-icon">
+                                <span className="input-icon ml-5">
                                     <Mail size={18} />
                                 </span>
 
@@ -952,7 +952,7 @@ export default function Login() {
                             <label>Password</label>
 
                             <div className="input-wrap">
-                                <span className="input-icon">
+                                <span className="input-icon ml-5">
                                     <Lock size={18} />
                                 </span>
 

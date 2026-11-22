@@ -5,6 +5,7 @@ import ProtectedRoute from "../../app/router/ProtectedRoute";
 import Permission from "../admin/pages/access-controll/Permission";
 import UserAccess from "../admin/pages/access-controll/UserAccess";
 import Role from "../admin/pages/access-controll/Role";
+import Users from "../admin/pages/access-controll/Users";
 
 const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
@@ -48,6 +49,14 @@ const authRoutes = [
             {
                 path: "/admin/system-management/child-menu",
                 element: <ChildMenu />,
+            },
+            {
+                path: "/admin/access-control/users",
+                element: (
+                    <ProtectedRoute roles={["admin"]}>
+                        <Users />
+                    </ProtectedRoute>
+                ),
             },
             {
                 path: "/admin/access-control/user-access",
