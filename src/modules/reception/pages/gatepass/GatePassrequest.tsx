@@ -38,38 +38,57 @@ interface GatePassItem {
     remarks: string;
 }
 
+interface GatePassPurpose {
+    id: number;
+    code: string;
+    name: string;
+    is_active: boolean;
+    approval_status: string;
+}
+
 interface GatePassData {
     id: number;
     pass_no: string;
-    gate_pass_type: "Person" | "Person With Material";
+    gate_pass_type:
+        | "Person"
+        | "Person With Material";
+
     requester?: {
         id: number;
         name: string;
     };
+
     department_name: string;
     designation_name: string;
+    purpose_id?: number | null;
     purpose: string;
     expected_exit_at: string;
     expected_return_at: string | null;
     remarks: string | null;
+
     status:
         | "Pending"
         | "Approved"
         | "Rejected"
         | "Cancelled"
         | "Completed";
+
     pending_approval?: {
         level: string;
         approver: string | null;
     } | null;
+
     items: GatePassItem[];
 }
 
 interface GatePassForm {
-    gate_pass_type: "Person" | "Person With Material";
+    gate_pass_type:
+        | "Person"
+        | "Person With Material";
+
     department_name: string;
     designation_name: string;
-    purpose: string;
+    purpose_id: string;
     expected_exit_at: string;
     expected_return_at: string;
     remarks: string;
@@ -96,7 +115,7 @@ interface PaginationData {
 }
 
 interface AuthUserResponse {
-    user: {
+    user?: {
         id: number;
         name: string;
         email: string;
@@ -112,13 +131,31 @@ interface AuthUserResponse {
             } | null;
         } | null;
     };
+    data?: {
+        user?: {
+            id: number;
+            name: string;
+            email: string;
+            employee?: {
+                id: number;
+                department_relation?: {
+                    id: number;
+                    name: string;
+                } | null;
+                designation_relation?: {
+                    id: number;
+                    name: string;
+                } | null;
+            } | null;
+        };
+    };
 }
 
 const initialForm: GatePassForm = {
     gate_pass_type: "Person",
     department_name: "",
     designation_name: "",
-    purpose: "",
+    purpose_id: "",
     expected_exit_at: "",
     expected_return_at: "",
     remarks: "",
@@ -146,19 +183,37 @@ const initialFilters: GatePassFilters = {
 };
 
 export default function GatePass() {
-    const [openSidebar, setOpenSidebar] = useState(false);
+    const [openSidebar, setOpenSidebar] =
+        useState(false);
 
-    const [gatePasses, setGatePasses] = useState<GatePassData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+    const [gatePasses, setGatePasses] =
+        useState<GatePassData[]>([]);
 
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] =
+        useState(true);
 
-    const [form, setForm] = useState<GatePassForm>({
-        ...initialForm,
-    });
+    const [refreshing, setRefreshing] =
+        useState(false);
+
+    const [modalOpen, setModalOpen] =
+        useState(false);
+
+    const [editingId, setEditingId] =
+        useState<number | null>(null);
+
+    const [saving, setSaving] =
+        useState(false);
+
+    const [purposes, setPurposes] =
+        useState<GatePassPurpose[]>([]);
+
+    const [purposeLoading, setPurposeLoading] =
+        useState(false);
+
+    const [form, setForm] =
+        useState<GatePassForm>({
+            ...initialForm,
+        });
 
     /*
     |--------------------------------------------------------------------------
@@ -166,9 +221,14 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const [userDepartment, setUserDepartment] = useState("");
-    const [userDesignation, setUserDesignation] = useState("");
-    const [userInfoLoading, setUserInfoLoading] = useState(true);
+    const [userDepartment, setUserDepartment] =
+        useState("");
+
+    const [userDesignation, setUserDesignation] =
+        useState("");
+
+    const [userInfoLoading, setUserInfoLoading] =
+        useState(true);
 
     useEffect(() => {
         const fetchUserInfo = async () => {
@@ -179,18 +239,31 @@ export default function GatePass() {
                     "/auth/me"
                 );
 
-                const employee = response.data.user?.employee;
+                const user =
+                    response.data?.user ||
+                    response.data?.data?.user;
 
-                setUserDepartment(
-                    employee?.department_relation?.name || ""
-                );
+                const employee = user?.employee;
 
-                setUserDesignation(
-                    employee?.designation_relation?.name || ""
-                );
+                const department =
+                    employee?.department_relation?.name || "";
+
+                const designation =
+                    employee?.designation_relation?.name || "";
+
+                setUserDepartment(department);
+                setUserDesignation(designation);
+
+                setForm((prev) => ({
+                    ...prev,
+                    department_name:
+                        prev.department_name || department,
+                    designation_name:
+                        prev.designation_name || designation,
+                }));
             } catch (error) {
                 console.error(
-                    "Failed to load logged-in user information:",
+                    "Failed to load logged-in user department and designation:",
                     error
                 );
             } finally {
@@ -207,26 +280,34 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const [filters, setFilters] = useState<GatePassFilters>({
-        ...initialFilters,
-    });
+    const [filters, setFilters] =
+        useState<GatePassFilters>({
+            ...initialFilters,
+        });
 
-    const [page, setPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(100);
+    const [page, setPage] =
+        useState(1);
 
-    const [pagination, setPagination] = useState<PaginationData>({
-        current_page: 1,
-        last_page: 1,
-        per_page: 100,
-        total: 0,
-        from: null,
-        to: null,
-    });
+    const [itemsPerPage, setItemsPerPage] =
+        useState(100);
 
-    const [sortField, setSortField] = useState<string | null>(null);
-    const [sortDirection, setSortDirection] = useState<
-        "asc" | "desc" | null
-    >(null);
+    const [pagination, setPagination] =
+        useState<PaginationData>({
+            current_page: 1,
+            last_page: 1,
+            per_page: 100,
+            total: 0,
+            from: null,
+            to: null,
+        });
+
+    const [sortField, setSortField] =
+        useState<string | null>(null);
+
+    const [sortDirection, setSortDirection] =
+        useState<"asc" | "desc" | null>(
+            null
+        );
 
     /*
     |--------------------------------------------------------------------------
@@ -239,78 +320,109 @@ export default function GatePass() {
             {
                 relation_name: null,
                 field_name: "pass_no",
-                search_param: filters.pass_no,
+                search_param:
+                    filters.pass_no,
                 action: null,
-                order_by: sortField === "pass_no" ? sortDirection : null,
+                order_by:
+                    sortField === "pass_no"
+                        ? sortDirection
+                        : null,
                 date_from: null,
                 label: "Pass No",
                 filter_type: "input",
             },
+
             {
                 relation_name: null,
-                field_name: "gate_pass_type",
-                search_param: filters.gate_pass_type,
+                field_name:
+                    "gate_pass_type",
+                search_param:
+                    filters.gate_pass_type,
                 action: null,
                 order_by:
-                    sortField === "gate_pass_type"
+                    sortField ===
+                    "gate_pass_type"
                         ? sortDirection
                         : null,
                 date_from: null,
                 label: "Type",
                 filter_type: "input",
             },
+
             {
                 relation_name: "requester",
                 field_name: "name",
-                search_param: filters.requester,
+                search_param:
+                    filters.requester,
                 action: null,
-                order_by: sortField === "requester" ? sortDirection : null,
+                order_by:
+                    sortField === "requester"
+                        ? sortDirection
+                        : null,
                 date_from: null,
                 label: "Requested By",
                 filter_type: "input",
             },
+
             {
                 relation_name: null,
-                field_name: "department_name",
-                search_param: filters.department_name,
+                field_name:
+                    "department_name",
+                search_param:
+                    filters.department_name,
                 action: null,
                 order_by:
-                    sortField === "department_name"
+                    sortField ===
+                    "department_name"
                         ? sortDirection
                         : null,
                 date_from: null,
                 label: "Department",
                 filter_type: "input",
             },
+
             {
                 relation_name: null,
                 field_name: "purpose",
-                search_param: filters.purpose,
+                search_param:
+                    filters.purpose,
                 action: null,
-                order_by: sortField === "purpose" ? sortDirection : null,
+                order_by:
+                    sortField === "purpose"
+                        ? sortDirection
+                        : null,
                 date_from: null,
                 label: "Purpose",
                 filter_type: "input",
             },
+
             {
                 relation_name: null,
-                field_name: "expected_exit_at",
-                search_param: filters.expected_exit_at,
+                field_name:
+                    "expected_exit_at",
+                search_param:
+                    filters.expected_exit_at,
                 action: null,
                 order_by:
-                    sortField === "expected_exit_at"
+                    sortField ===
+                    "expected_exit_at"
                         ? sortDirection
                         : null,
                 date_from: null,
                 label: "Exit Time",
                 filter_type: "input",
             },
+
             {
                 relation_name: null,
                 field_name: "status",
-                search_param: filters.status,
+                search_param:
+                    filters.status,
                 action: null,
-                order_by: sortField === "status" ? sortDirection : null,
+                order_by:
+                    sortField === "status"
+                        ? sortDirection
+                        : null,
                 date_from: null,
                 label: "Status",
                 filter_type: "input",
@@ -320,12 +432,59 @@ export default function GatePass() {
 
     /*
     |--------------------------------------------------------------------------
+    | Fetch Gate Pass Purposes
+    |--------------------------------------------------------------------------
+    */
+
+    const fetchPurposes = useCallback(async () => {
+        try {
+            setPurposeLoading(true);
+
+            const response = await api.get(
+                "/reception/gate-pass-purposes",
+                {
+                    params: {
+                        is_active: 1,
+                        approval_status: "Approved",
+                        per_page: 100,
+                    },
+                }
+            );
+
+            const result = response.data?.data;
+            const purposeList = Array.isArray(result)
+                ? result
+                : Array.isArray(result?.data)
+                ? result.data
+                : [];
+
+            setPurposes(purposeList);
+        } catch (error) {
+            console.error(
+                "Failed to load gate pass purposes:",
+                error
+            );
+            setPurposes([]);
+        } finally {
+            setPurposeLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void fetchPurposes();
+    }, [fetchPurposes]);
+
+    /*
+    |--------------------------------------------------------------------------
     | Fetch Gate Passes
     |--------------------------------------------------------------------------
     */
 
     const fetchGatePasses = useCallback(
-        async (isRefresh = false, requestedPage = page) => {
+        async (
+            isRefresh = false,
+            requestedPage = page
+        ) => {
             try {
                 if (isRefresh) {
                     setRefreshing(true);
@@ -335,52 +494,121 @@ export default function GatePass() {
 
                 const data = {
                     business_unit: "MML",
-                    items_per_page: itemsPerPage,
+                    items_per_page:
+                        itemsPerPage,
                     page: requestedPage,
                     isFilter: true,
-                    filter_options: buildFilterOptions(),
+                    filter_options:
+                        buildFilterOptions(),
                 };
 
-                const response = await api.get(
-                    "/reception/gate-passes",
-                    {
-                        params: {
-                            page: requestedPage,
-                            items_per_page: itemsPerPage,
-                            data: JSON.stringify(data),
-                        },
-                    }
-                );
+                const response =
+                    await api.get(
+                        "/reception/gate-passes",
+                        {
+                            params: {
+                                page: requestedPage,
+                                items_per_page:
+                                    itemsPerPage,
+                                data: JSON.stringify(
+                                    data
+                                ),
+                            },
+                        }
+                    );
 
-                if (response.data.success) {
-                    const result = response.data.data;
+                if (
+                    response.data.success
+                ) {
+                    const result =
+                        response.data.data;
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Laravel Pagination Response
+                    |--------------------------------------------------------------------------
+                    |
+                    | {
+                    |     data: [],
+                    |     current_page: 1,
+                    |     last_page: 5,
+                    |     per_page: 100,
+                    |     total: 450
+                    | }
+                    |
+                    */
 
                     if (
                         result &&
-                        !Array.isArray(result) &&
-                        Array.isArray(result.data)
+                        !Array.isArray(
+                            result
+                        ) &&
+                        Array.isArray(
+                            result.data
+                        )
                     ) {
-                        setGatePasses(result.data);
+                        setGatePasses(
+                            result.data
+                        );
 
                         setPagination({
                             current_page:
-                                result.current_page || requestedPage,
-                            last_page: result.last_page || 1,
-                            per_page: result.per_page || itemsPerPage,
-                            total: result.total || 0,
-                            from: result.from || null,
-                            to: result.to || null,
+                                result.current_page ||
+                                requestedPage,
+
+                            last_page:
+                                result.last_page ||
+                                1,
+
+                            per_page:
+                                result.per_page ||
+                                itemsPerPage,
+
+                            total:
+                                result.total ||
+                                0,
+
+                            from:
+                                result.from ||
+                                null,
+
+                            to:
+                                result.to ||
+                                null,
                         });
-                    } else if (Array.isArray(result)) {
-                        setGatePasses(result);
+                    } else if (
+                        Array.isArray(
+                            result
+                        )
+                    ) {
+                        setGatePasses(
+                            result
+                        );
 
                         setPagination({
-                            current_page: requestedPage,
-                            last_page: 1,
-                            per_page: itemsPerPage,
-                            total: result.length,
-                            from: result.length > 0 ? 1 : null,
-                            to: result.length > 0 ? result.length : null,
+                            current_page:
+                                requestedPage,
+
+                            last_page:
+                                1,
+
+                            per_page:
+                                itemsPerPage,
+
+                            total:
+                                result.length,
+
+                            from:
+                                result.length >
+                                0
+                                    ? 1
+                                    : null,
+
+                            to:
+                                result.length >
+                                0
+                                    ? result.length
+                                    : null,
                         });
                     }
                 }
@@ -411,10 +639,15 @@ export default function GatePass() {
 
     useEffect(() => {
         const timer = setTimeout(() => {
-            fetchGatePasses(false, page);
+            fetchGatePasses(
+                false,
+                page
+            );
         }, 500);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+        };
     }, [
         filters,
         sortField,
@@ -449,9 +682,13 @@ export default function GatePass() {
     */
 
     const clearFilters = () => {
-        setFilters({ ...initialFilters });
+        setFilters({
+            ...initialFilters,
+        });
+
         setSortField(null);
         setSortDirection(null);
+
         setPage(1);
     };
 
@@ -461,19 +698,34 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const handleSort = (field: string) => {
-        let direction: "asc" | "desc" | null = "asc";
+    const handleSort = (
+        field: string
+    ) => {
+        let direction:
+            | "asc"
+            | "desc"
+            | null = "asc";
 
         if (sortField === field) {
-            if (sortDirection === "asc") {
+            if (
+                sortDirection ===
+                "asc"
+            ) {
                 direction = "desc";
-            } else if (sortDirection === "desc") {
+            } else if (
+                sortDirection ===
+                "desc"
+            ) {
                 direction = null;
             }
         }
 
-        setSortField(direction ? field : null);
+        setSortField(
+            direction ? field : null
+        );
+
         setSortDirection(direction);
+
         setPage(1);
     };
 
@@ -502,32 +754,84 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const openEditModal = (gatePass: GatePassData) => {
-        setEditingId(gatePass.id);
+    const openEditModal = (
+        gatePass: GatePassData
+    ) => {
+        setEditingId(
+            gatePass.id
+        );
 
         setForm({
-            gate_pass_type: gatePass.gate_pass_type,
-            department_name: gatePass.department_name || "",
-            designation_name: gatePass.designation_name || "",
-            purpose: gatePass.purpose || "",
-            expected_exit_at: formatDateTimeForInput(
-                gatePass.expected_exit_at
-            ),
-            expected_return_at: gatePass.expected_return_at
-                ? formatDateTimeForInput(gatePass.expected_return_at)
-                : "",
-            remarks: gatePass.remarks || "",
+            gate_pass_type:
+                gatePass.gate_pass_type,
+
+            department_name:
+                gatePass.department_name ||
+                "",
+
+            designation_name:
+                gatePass.designation_name ||
+                "",
+
+            purpose_id:
+                gatePass.purpose_id
+                    ? String(gatePass.purpose_id)
+                    : String(
+                          purposes.find(
+                              (purpose) =>
+                                  purpose.name === gatePass.purpose
+                          )?.id || ""
+                      ),
+
+            expected_exit_at:
+                formatDateTimeForInput(
+                    gatePass.expected_exit_at
+                ),
+
+            expected_return_at:
+                gatePass.expected_return_at
+                    ? formatDateTimeForInput(
+                          gatePass.expected_return_at
+                      )
+                    : "",
+
+            remarks:
+                gatePass.remarks || "",
+
             items:
-                gatePass.items?.map((item) => ({
-                    id: item.id,
-                    product_id: item.product_id,
-                    product_name: item.product_name || "",
-                    quantity: Number(item.quantity),
-                    unit: item.unit || "Pcs",
-                    asset_no: item.asset_no || "",
-                    serial_no: item.serial_no || "",
-                    remarks: item.remarks || "",
-                })) || [],
+                gatePass.items?.map(
+                    (item) => ({
+                        id: item.id,
+
+                        product_id:
+                            item.product_id,
+
+                        product_name:
+                            item.product_name ||
+                            "",
+
+                        quantity:
+                            Number(
+                                item.quantity
+                            ),
+
+                        unit:
+                            item.unit ||
+                            "Pcs",
+
+                        asset_no:
+                            item.asset_no ||
+                            "",
+
+                        serial_no:
+                            item.serial_no ||
+                            "",
+
+                        remarks:
+                            item.remarks ||
+                            "",
+                    })
+                ) || [],
         });
 
         setModalOpen(true);
@@ -540,9 +844,12 @@ export default function GatePass() {
     */
 
     const closeModal = () => {
-        if (saving) return;
+        if (saving) {
+            return;
+        }
 
         setModalOpen(false);
+
         setEditingId(null);
 
         setForm({
@@ -557,17 +864,25 @@ export default function GatePass() {
     */
 
     const handleTypeChange = (
-        type: "Person" | "Person With Material"
+        type:
+            | "Person"
+            | "Person With Material"
     ) => {
         setForm((prev) => ({
             ...prev,
+
             gate_pass_type: type,
+
             items:
                 type === "Person"
                     ? []
                     : prev.items.length > 0
                     ? prev.items
-                    : [{ ...emptyItem }],
+                    : [
+                          {
+                              ...emptyItem,
+                          },
+                      ],
         }));
     };
 
@@ -580,7 +895,13 @@ export default function GatePass() {
     const addItem = () => {
         setForm((prev) => ({
             ...prev,
-            items: [...prev.items, { ...emptyItem }],
+
+            items: [
+                ...prev.items,
+                {
+                    ...emptyItem,
+                },
+            ],
         }));
     };
 
@@ -590,11 +911,15 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const removeItem = (index: number) => {
+    const removeItem = (
+        index: number
+    ) => {
         setForm((prev) => ({
             ...prev,
+
             items: prev.items.filter(
-                (_, itemIndex) => itemIndex !== index
+                (_, itemIndex) =>
+                    itemIndex !== index
             ),
         }));
     };
@@ -608,14 +933,27 @@ export default function GatePass() {
     const updateItem = (
         index: number,
         field: keyof GatePassItem,
-        value: string | number | null
+        value:
+            | string
+            | number
+            | null
     ) => {
         setForm((prev) => ({
             ...prev,
-            items: prev.items.map((item, itemIndex) =>
-                itemIndex === index
-                    ? { ...item, [field]: value }
-                    : item
+
+            items: prev.items.map(
+                (
+                    item,
+                    itemIndex
+                ) =>
+                    itemIndex ===
+                    index
+                        ? {
+                              ...item,
+                              [field]:
+                                  value,
+                          }
+                        : item
             ),
         }));
     };
@@ -626,45 +964,76 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (
+        e: React.FormEvent
+    ) => {
         e.preventDefault();
 
-        if (!form.department_name.trim()) {
-            alert("Department information is not available.");
+        if (
+            !form.department_name.trim()
+        ) {
+            alert(
+                "Please enter department name."
+            );
+
             return;
         }
 
-        if (!form.designation_name.trim()) {
-            alert("Designation information is not available.");
+        if (
+            !form.designation_name.trim()
+        ) {
+            alert(
+                "Please enter designation name."
+            );
+
             return;
         }
 
-        if (!form.purpose.trim()) {
-            alert("Please enter purpose.");
+        if (!form.purpose_id) {
+            alert(
+                "Please select purpose."
+            );
+
             return;
         }
 
         if (!form.expected_exit_at) {
-            alert("Please select expected exit time.");
+            alert(
+                "Please select expected exit time."
+            );
+
             return;
         }
 
-        if (form.gate_pass_type === "Person With Material") {
-            if (form.items.length === 0) {
-                alert("Please add at least one material item.");
+        if (
+            form.gate_pass_type ===
+            "Person With Material"
+        ) {
+            if (
+                form.items.length ===
+                0
+            ) {
+                alert(
+                    "Please add at least one material item."
+                );
+
                 return;
             }
 
-            const invalidItem = form.items.some(
-                (item) =>
-                    !item.product_name.trim() ||
-                    Number(item.quantity) <= 0
-            );
+            const invalidItem =
+                form.items.some(
+                    (item) =>
+                        !item.product_name.trim() ||
+                        Number(
+                            item.quantity
+                        ) <= 0
+                );
 
             if (invalidItem) {
                 alert(
                     "Please enter valid product name and quantity for all items."
                 );
+
                 return;
             }
         }
@@ -673,26 +1042,63 @@ export default function GatePass() {
 
         try {
             const data = {
-                gate_pass_type: form.gate_pass_type,
-                department_name: form.department_name.trim(),
-                designation_name: form.designation_name.trim(),
-                purpose: form.purpose.trim(),
-                expected_exit_at: form.expected_exit_at,
+                gate_pass_type:
+                    form.gate_pass_type,
+
+                department_name:
+                    form.department_name.trim(),
+
+                designation_name:
+                    form.designation_name.trim(),
+
+                purpose_id:
+                    Number(form.purpose_id),
+
+                expected_exit_at:
+                    form.expected_exit_at,
+
                 expected_return_at:
-                    form.expected_return_at || null,
-                remarks: form.remarks.trim() || null,
+                    form.expected_return_at ||
+                    null,
+
+                remarks:
+                    form.remarks.trim() ||
+                    null,
+
                 items:
-                    form.gate_pass_type === "Person"
+                    form.gate_pass_type ===
+                    "Person"
                         ? []
-                        : form.items.map((item) => ({
-                              product_id: item.product_id,
-                              product_name: item.product_name.trim(),
-                              quantity: Number(item.quantity),
-                              unit: item.unit.trim() || null,
-                              asset_no: item.asset_no.trim() || null,
-                              serial_no: item.serial_no.trim() || null,
-                              remarks: item.remarks.trim() || null,
-                          })),
+                        : form.items.map(
+                              (item) => ({
+                                  product_id:
+                                      item.product_id,
+
+                                  product_name:
+                                      item.product_name.trim(),
+
+                                  quantity:
+                                      Number(
+                                          item.quantity
+                                      ),
+
+                                  unit:
+                                      item.unit.trim() ||
+                                      null,
+
+                                  asset_no:
+                                      item.asset_no.trim() ||
+                                      null,
+
+                                  serial_no:
+                                      item.serial_no.trim() ||
+                                      null,
+
+                                  remarks:
+                                      item.remarks.trim() ||
+                                      null,
+                              })
+                          ),
             };
 
             if (editingId) {
@@ -708,15 +1114,26 @@ export default function GatePass() {
             }
 
             setModalOpen(false);
-            setEditingId(null);
-            setForm({ ...initialForm });
 
-            await fetchGatePasses(true, page);
+            setEditingId(null);
+
+            setForm({
+                ...initialForm,
+            });
+
+            await fetchGatePasses(
+                true,
+                page
+            );
         } catch (error: any) {
-            console.error("Failed to save gate pass:", error);
+            console.error(
+                "Failed to save gate pass:",
+                error
+            );
 
             alert(
-                error?.response?.data?.message ||
+                error?.response?.data
+                    ?.message ||
                     "Failed to save gate pass."
             );
         } finally {
@@ -730,7 +1147,9 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = async (
+        id: number
+    ) => {
         if (
             !window.confirm(
                 "Are you sure you want to delete this gate pass?"
@@ -740,13 +1159,23 @@ export default function GatePass() {
         }
 
         try {
-            await api.delete(`/reception/gate-passes/${id}`);
-            await fetchGatePasses(true, page);
+            await api.delete(
+                `/reception/gate-passes/${id}`
+            );
+
+            await fetchGatePasses(
+                true,
+                page
+            );
         } catch (error: any) {
-            console.error("Failed to delete gate pass:", error);
+            console.error(
+                "Failed to delete gate pass:",
+                error
+            );
 
             alert(
-                error?.response?.data?.message ||
+                error?.response?.data
+                    ?.message ||
                     "Failed to delete gate pass."
             );
         }
@@ -758,39 +1187,64 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const handleDownloadPdf = async (id: number) => {
-        try {
-            const response = await api.get(
-                `/reception/gate-passes/${id}/pdf`,
-                {
-                    responseType: "blob",
-                }
-            );
+    const handleDownloadPdf =
+        async (id: number) => {
+            try {
+                const response =
+                    await api.get(
+                        `/reception/gate-passes/${id}/pdf`,
+                        {
+                            responseType:
+                                "blob",
+                        }
+                    );
 
-            const blob = new Blob([response.data], {
-                type: "application/pdf",
-            });
+                const blob =
+                    new Blob(
+                        [
+                            response.data,
+                        ],
+                        {
+                            type: "application/pdf",
+                        }
+                    );
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
+                const url =
+                    window.URL.createObjectURL(
+                        blob
+                    );
 
-            link.href = url;
-            link.download = `gate-pass-${id}.pdf`;
+                const link =
+                    document.createElement(
+                        "a"
+                    );
 
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+                link.href = url;
 
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error(
-                "Failed to download gate pass PDF:",
-                error
-            );
+                link.download = `gate-pass-${id}.pdf`;
 
-            alert("Failed to download gate pass PDF.");
-        }
-    };
+                document.body.appendChild(
+                    link
+                );
+
+                link.click();
+
+                link.remove();
+
+                window.URL.revokeObjectURL(
+                    url
+                );
+            } catch (error) {
+                console.error(
+                    "Failed to download gate pass PDF:",
+                    error
+                );
+
+                alert(
+                    "Failed to download gate pass PDF."
+                );
+            }
+        };
 
     /*
     |--------------------------------------------------------------------------
@@ -801,18 +1255,29 @@ export default function GatePass() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-indigo-100 flex">
             <SideNav
-                openSidebar={openSidebar}
-                setOpenSidebar={setOpenSidebar}
+                openSidebar={
+                    openSidebar
+                }
+                setOpenSidebar={
+                    setOpenSidebar
+                }
             />
 
             <main className="flex-1 min-w-0">
                 <TopNav
-                    openSidebar={openSidebar}
-                    setOpenSidebar={setOpenSidebar}
+                    openSidebar={
+                        openSidebar
+                    }
+                    setOpenSidebar={
+                        setOpenSidebar
+                    }
                 />
 
                 <div className="p-4 lg:p-6 overflow-y-auto h-[calc(100vh-64px)]">
+
+                    {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+
                         <div>
                             <h2 className="text-2xl lg:text-3xl font-extrabold text-gray-800">
                                 Gate Pass
@@ -824,34 +1289,58 @@ export default function GatePass() {
                         </div>
 
                         <div className="flex items-center gap-2">
+
                             <button
                                 type="button"
-                                onClick={() => fetchGatePasses(true, page)}
-                                disabled={refreshing}
+                                onClick={() =>
+                                    fetchGatePasses(
+                                        true,
+                                        page
+                                    )
+                                }
+                                disabled={
+                                    refreshing
+                                }
                                 className="w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-600 hover:text-indigo-600 hover:border-indigo-200 transition disabled:opacity-50"
                                 title="Refresh"
                             >
                                 <RefreshCw
-                                    size={17}
+                                    size={
+                                        17
+                                    }
                                     className={
-                                        refreshing ? "animate-spin" : ""
+                                        refreshing
+                                            ? "animate-spin"
+                                            : ""
                                     }
                                 />
                             </button>
 
                             <button
                                 type="button"
-                                onClick={openCreateModal}
+                                onClick={
+                                    openCreateModal
+                                }
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
-                                <Plus size={18} />
+                                <Plus
+                                    size={
+                                        18
+                                    }
+                                />
+
                                 Add Gate Pass
                             </button>
+
                         </div>
                     </div>
 
+                    {/* Table Card */}
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+
+                        {/* Table Header */}
                         <div className="px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
                             <div>
                                 <h3 className="text-lg font-bold text-gray-800">
                                     Gate Pass List
@@ -863,32 +1352,58 @@ export default function GatePass() {
                             </div>
 
                             <div className="flex items-center gap-2">
+
                                 <span className="text-xs text-gray-400">
                                     Records:
                                 </span>
 
                                 <select
-                                    value={itemsPerPage}
-                                    onChange={(e) => {
+                                    value={
+                                        itemsPerPage
+                                    }
+                                    onChange={(
+                                        e
+                                    ) => {
                                         setItemsPerPage(
-                                            Number(e.target.value)
+                                            Number(
+                                                e
+                                                    .target
+                                                    .value
+                                            )
                                         );
-                                        setPage(1);
+
+                                        setPage(
+                                            1
+                                        );
                                     }}
                                     className="h-8 px-2 rounded-md border border-gray-200 bg-white text-xs text-gray-600 focus:outline-none focus:border-indigo-400"
                                 >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
+                                    <option value={10}>
+                                        10
+                                    </option>
+
+                                    <option value={25}>
+                                        25
+                                    </option>
+
+                                    <option value={50}>
+                                        50
+                                    </option>
+
+                                    <option value={100}>
+                                        100
+                                    </option>
                                 </select>
+
                             </div>
                         </div>
 
                         {loading ? (
                             <div className="py-20 text-center">
                                 <RefreshCw
-                                    size={30}
+                                    size={
+                                        30
+                                    }
                                     className="mx-auto animate-spin text-indigo-600"
                                 />
 
@@ -900,8 +1415,11 @@ export default function GatePass() {
                             <>
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[1250px]">
+
+                                        {/* Header */}
                                         <thead>
                                             <tr className="bg-gray-50 border-b border-gray-200">
+
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 w-14">
                                                     #
                                                 </th>
@@ -909,33 +1427,57 @@ export default function GatePass() {
                                                 <SortableHeader
                                                     title="Pass No"
                                                     field="pass_no"
-                                                    sortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={handleSort}
+                                                    sortField={
+                                                        sortField
+                                                    }
+                                                    sortDirection={
+                                                        sortDirection
+                                                    }
+                                                    onSort={
+                                                        handleSort
+                                                    }
                                                 />
 
                                                 <SortableHeader
                                                     title="Type"
                                                     field="gate_pass_type"
-                                                    sortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={handleSort}
+                                                    sortField={
+                                                        sortField
+                                                    }
+                                                    sortDirection={
+                                                        sortDirection
+                                                    }
+                                                    onSort={
+                                                        handleSort
+                                                    }
                                                 />
 
                                                 <SortableHeader
                                                     title="Requested By"
                                                     field="requester"
-                                                    sortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={handleSort}
+                                                    sortField={
+                                                        sortField
+                                                    }
+                                                    sortDirection={
+                                                        sortDirection
+                                                    }
+                                                    onSort={
+                                                        handleSort
+                                                    }
                                                 />
 
                                                 <SortableHeader
                                                     title="Department"
                                                     field="department_name"
-                                                    sortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={handleSort}
+                                                    sortField={
+                                                        sortField
+                                                    }
+                                                    sortDirection={
+                                                        sortDirection
+                                                    }
+                                                    onSort={
+                                                        handleSort
+                                                    }
                                                 />
 
                                                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">
@@ -949,21 +1491,32 @@ export default function GatePass() {
                                                 <SortableHeader
                                                     title="Status"
                                                     field="status"
-                                                    sortField={sortField}
-                                                    sortDirection={sortDirection}
-                                                    onSort={handleSort}
+                                                    sortField={
+                                                        sortField
+                                                    }
+                                                    sortDirection={
+                                                        sortDirection
+                                                    }
+                                                    onSort={
+                                                        handleSort
+                                                    }
                                                 />
 
                                                 <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500">
                                                     Action
                                                 </th>
+
                                             </tr>
 
+                                            {/* Filter Row */}
                                             <tr className="bg-gray-50 border-b border-gray-200">
+
                                                 <th className="px-3 py-1.5">
                                                     <div className="flex items-center justify-center">
                                                         <Filter
-                                                            size={15}
+                                                            size={
+                                                                15
+                                                            }
                                                             className="text-gray-400"
                                                         />
                                                     </div>
@@ -971,8 +1524,12 @@ export default function GatePass() {
 
                                                 <th className="px-3 py-1.5">
                                                     <TableFilterInput
-                                                        value={filters.pass_no}
-                                                        onChange={(value) =>
+                                                        value={
+                                                            filters.pass_no
+                                                        }
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "pass_no",
                                                                 value
@@ -986,7 +1543,9 @@ export default function GatePass() {
                                                         value={
                                                             filters.gate_pass_type
                                                         }
-                                                        onChange={(value) =>
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "gate_pass_type",
                                                                 value
@@ -997,8 +1556,12 @@ export default function GatePass() {
 
                                                 <th className="px-3 py-1.5">
                                                     <TableFilterInput
-                                                        value={filters.requester}
-                                                        onChange={(value) =>
+                                                        value={
+                                                            filters.requester
+                                                        }
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "requester",
                                                                 value
@@ -1012,7 +1575,9 @@ export default function GatePass() {
                                                         value={
                                                             filters.department_name
                                                         }
-                                                        onChange={(value) =>
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "department_name",
                                                                 value
@@ -1023,8 +1588,12 @@ export default function GatePass() {
 
                                                 <th className="px-3 py-1.5">
                                                     <TableFilterInput
-                                                        value={filters.purpose}
-                                                        onChange={(value) =>
+                                                        value={
+                                                            filters.purpose
+                                                        }
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "purpose",
                                                                 value
@@ -1038,7 +1607,9 @@ export default function GatePass() {
                                                         value={
                                                             filters.expected_exit_at
                                                         }
-                                                        onChange={(value) =>
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "expected_exit_at",
                                                                 value
@@ -1050,8 +1621,12 @@ export default function GatePass() {
 
                                                 <th className="px-3 py-1.5">
                                                     <TableFilterInput
-                                                        value={filters.status}
-                                                        onChange={(value) =>
+                                                        value={
+                                                            filters.status
+                                                        }
+                                                        onChange={(
+                                                            value
+                                                        ) =>
                                                             handleFilterChange(
                                                                 "status",
                                                                 value
@@ -1063,25 +1638,39 @@ export default function GatePass() {
                                                 <th className="px-3 py-1.5">
                                                     <button
                                                         type="button"
-                                                        onClick={clearFilters}
+                                                        onClick={
+                                                            clearFilters
+                                                        }
                                                         title="Clear Filters"
                                                         className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-red-500 transition"
                                                     >
-                                                        <FunnelX size={18} />
+                                                        <FunnelX
+                                                            size={
+                                                                18
+                                                            }
+                                                        />
                                                     </button>
                                                 </th>
+
                                             </tr>
                                         </thead>
 
+                                        {/* Body */}
                                         <tbody className="divide-y divide-gray-100">
-                                            {gatePasses.length === 0 ? (
+
+                                            {gatePasses.length ===
+                                            0 ? (
                                                 <tr>
                                                     <td
-                                                        colSpan={9}
+                                                        colSpan={
+                                                            9
+                                                        }
                                                         className="py-16 text-center"
                                                     >
                                                         <ShieldCheck
-                                                            size={32}
+                                                            size={
+                                                                32
+                                                            }
                                                             className="mx-auto text-gray-300"
                                                         />
 
@@ -1096,11 +1685,18 @@ export default function GatePass() {
                                                 </tr>
                                             ) : (
                                                 gatePasses.map(
-                                                    (gatePass, index) => (
+                                                    (
+                                                        gatePass,
+                                                        index
+                                                    ) => (
                                                         <tr
-                                                            key={gatePass.id}
+                                                            key={
+                                                                gatePass.id
+                                                            }
                                                             className="hover:bg-gray-50 transition"
                                                         >
+
+                                                            {/* # */}
                                                             <td className="px-3 py-3 text-xs text-gray-500">
                                                                 {(pagination.current_page -
                                                                     1) *
@@ -1109,6 +1705,7 @@ export default function GatePass() {
                                                                     1}
                                                             </td>
 
+                                                            {/* Pass No */}
                                                             <td className="px-3 py-3">
                                                                 <span className="text-sm font-semibold text-indigo-600 whitespace-nowrap">
                                                                     {
@@ -1117,6 +1714,7 @@ export default function GatePass() {
                                                                 </span>
                                                             </td>
 
+                                                            {/* Type */}
                                                             <td className="px-3 py-3">
                                                                 <TypeBadge
                                                                     type={
@@ -1125,6 +1723,7 @@ export default function GatePass() {
                                                                 />
                                                             </td>
 
+                                                            {/* Requested By */}
                                                             <td className="px-3 py-3">
                                                                 <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                                                                     {gatePass
@@ -1134,6 +1733,7 @@ export default function GatePass() {
                                                                 </span>
                                                             </td>
 
+                                                            {/* Department */}
                                                             <td className="px-3 py-3">
                                                                 <div>
                                                                     <p className="text-sm font-semibold text-gray-700">
@@ -1150,6 +1750,7 @@ export default function GatePass() {
                                                                 </div>
                                                             </td>
 
+                                                            {/* Purpose */}
                                                             <td className="px-3 py-3">
                                                                 <span className="text-sm text-gray-600">
                                                                     {
@@ -1158,6 +1759,7 @@ export default function GatePass() {
                                                                 </span>
                                                             </td>
 
+                                                            {/* Exit */}
                                                             <td className="px-3 py-3">
                                                                 <span className="text-sm text-gray-600 whitespace-nowrap">
                                                                     {formatDateTime(
@@ -1166,8 +1768,10 @@ export default function GatePass() {
                                                                 </span>
                                                             </td>
 
+                                                            {/* Status */}
                                                             <td className="px-3 py-3">
                                                                 <div className="space-y-1">
+
                                                                     <StatusBadge
                                                                         status={
                                                                             gatePass.status
@@ -1186,18 +1790,23 @@ export default function GatePass() {
                                                                             </p>
 
                                                                             <p>
-                                                                                {gatePass
-                                                                                    .pending_approval
-                                                                                    .approver ||
-                                                                                    "--"}
+                                                                                {
+                                                                                    gatePass
+                                                                                        .pending_approval
+                                                                                        .approver ||
+                                                                                    "--"
+                                                                                }
                                                                             </p>
                                                                         </div>
                                                                     )}
+
                                                                 </div>
                                                             </td>
 
+                                                            {/* Action */}
                                                             <td className="px-3 py-3">
                                                                 <div className="flex items-center justify-end gap-1.5">
+
                                                                     <button
                                                                         type="button"
                                                                         onClick={() =>
@@ -1248,51 +1857,81 @@ export default function GatePass() {
                                                                             }
                                                                         />
                                                                     </button>
+
                                                                 </div>
                                                             </td>
+
                                                         </tr>
                                                     )
                                                 )
                                             )}
+
                                         </tbody>
                                     </table>
                                 </div>
 
-                                {pagination.total > 0 && (
+                                {/* Pagination */}
+                                {pagination.total >
+                                    0 && (
                                     <div className="px-4 py-3 border-t border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
                                         <div className="text-xs text-gray-500">
                                             Showing{" "}
                                             <span className="font-semibold text-gray-700">
-                                                {pagination.from}
+                                                {
+                                                    pagination.from
+                                                }
                                             </span>{" "}
                                             to{" "}
                                             <span className="font-semibold text-gray-700">
-                                                {pagination.to}
+                                                {
+                                                    pagination.to
+                                                }
                                             </span>{" "}
                                             of{" "}
                                             <span className="font-semibold text-gray-700">
-                                                {pagination.total}
+                                                {
+                                                    pagination.total
+                                                }
                                             </span>{" "}
                                             records
                                         </div>
 
                                         <div className="flex items-center gap-1">
+
                                             <button
                                                 type="button"
-                                                disabled={page <= 1}
+                                                disabled={
+                                                    page <=
+                                                    1
+                                                }
                                                 onClick={() =>
-                                                    setPage((prev) =>
-                                                        Math.max(1, prev - 1)
+                                                    setPage(
+                                                        (
+                                                            prev
+                                                        ) =>
+                                                            Math.max(
+                                                                1,
+                                                                prev -
+                                                                    1
+                                                            )
                                                     )
                                                 }
                                                 className="h-8 px-3 rounded-md border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                                             >
-                                                <ChevronLeft size={14} />
+                                                <ChevronLeft
+                                                    size={
+                                                        14
+                                                    }
+                                                />
+
                                                 Previous
                                             </button>
 
                                             <div className="h-8 min-w-8 px-2 rounded-md bg-indigo-600 text-white text-xs font-semibold flex items-center justify-center">
-                                                {pagination.current_page}
+                                                {
+                                                    pagination.current_page
+                                                }
                                             </div>
 
                                             <button
@@ -1302,18 +1941,28 @@ export default function GatePass() {
                                                     pagination.last_page
                                                 }
                                                 onClick={() =>
-                                                    setPage((prev) =>
-                                                        Math.min(
-                                                            pagination.last_page,
-                                                            prev + 1
-                                                        )
+                                                    setPage(
+                                                        (
+                                                            prev
+                                                        ) =>
+                                                            Math.min(
+                                                                pagination.last_page,
+                                                                prev +
+                                                                    1
+                                                            )
                                                     )
                                                 }
                                                 className="h-8 px-3 rounded-md border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                                             >
                                                 Next
-                                                <ChevronRight size={14} />
+
+                                                <ChevronRight
+                                                    size={
+                                                        14
+                                                    }
+                                                />
                                             </button>
+
                                         </div>
                                     </div>
                                 )}
@@ -1326,12 +1975,19 @@ export default function GatePass() {
             {/* Modal */}
             {modalOpen && (
                 <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
+
                     <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+
+                        {/* Modal Header */}
                         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+
                             <div className="flex items-center gap-3">
+
                                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
                                     <ShieldCheck
-                                        size={20}
+                                        size={
+                                            20
+                                        }
                                         className="text-indigo-600"
                                     />
                                 </div>
@@ -1349,43 +2005,68 @@ export default function GatePass() {
                                             : "Create a new gate pass request"}
                                     </p>
                                 </div>
+
                             </div>
 
                             <button
                                 type="button"
-                                onClick={closeModal}
-                                disabled={saving}
+                                onClick={
+                                    closeModal
+                                }
+                                disabled={
+                                    saving
+                                }
                                 className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition disabled:opacity-50"
                             >
-                                <X size={18} />
+                                <X
+                                    size={
+                                        18
+                                    }
+                                />
                             </button>
                         </div>
 
                         <form
-                            onSubmit={handleSubmit}
+                            onSubmit={
+                                handleSubmit
+                            }
                             className="flex flex-col min-h-0"
                         >
+
+                            {/* Body */}
                             <div className="p-6 overflow-y-auto space-y-6">
+
                                 {/* Gate Pass Type */}
                                 <div>
+
                                     <label className="block text-sm font-semibold text-gray-700 mb-3">
                                         Gate Pass Type
+
                                         <span className="text-red-500 ml-1">
                                             *
                                         </span>
                                     </label>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
                                         <TypeOption
                                             active={
                                                 form.gate_pass_type ===
                                                 "Person"
                                             }
-                                            icon={<UserRound size={20} />}
+                                            icon={
+                                                <UserRound
+                                                    size={
+                                                        20
+                                                    }
+                                                />
+                                            }
                                             title="Person"
                                             description="Person only"
                                             onClick={() =>
-                                                handleTypeChange("Person")
+                                                handleTypeChange(
+                                                    "Person"
+                                                )
                                             }
                                         />
 
@@ -1394,7 +2075,13 @@ export default function GatePass() {
                                                 form.gate_pass_type ===
                                                 "Person With Material"
                                             }
-                                            icon={<UsersRound size={20} />}
+                                            icon={
+                                                <UsersRound
+                                                    size={
+                                                        20
+                                                    }
+                                                />
+                                            }
                                             title="Person With Material"
                                             description="Person with material"
                                             onClick={() =>
@@ -1403,14 +2090,18 @@ export default function GatePass() {
                                                 )
                                             }
                                         />
+
                                     </div>
                                 </div>
 
                                 {/* Request Information */}
                                 <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5">
+
                                     <div className="flex items-center gap-2 mb-4">
                                         <UserRound
-                                            size={17}
+                                            size={
+                                                17
+                                            }
                                             className="text-indigo-600"
                                         />
 
@@ -1420,13 +2111,12 @@ export default function GatePass() {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
                                         {/* Department */}
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                                                 Department
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
+                                                <span className="text-red-500 ml-1">*</span>
                                             </label>
 
                                             <input
@@ -1446,9 +2136,7 @@ export default function GatePass() {
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                                                 Designation
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
+                                                <span className="text-red-500 ml-1">*</span>
                                             </label>
 
                                             <input
@@ -1464,73 +2152,142 @@ export default function GatePass() {
                                             />
                                         </div>
 
-                                        <FormInput
-                                            label="Purpose"
-                                            required
-                                            value={form.purpose}
-                                            onChange={(value) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    purpose: value,
-                                                }))
-                                            }
-                                            placeholder="Official Work"
-                                        />
+                                        {/* Purpose */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                                Purpose <span className="text-red-500">*</span>
+                                            </label>
 
+                                            <select
+                                                value={form.purpose_id}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        purpose_id: e.target.value,
+                                                    }))
+                                                }
+                                                disabled={purposeLoading || saving}
+                                                className="w-full h-11 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-gray-100"
+                                            >
+                                                <option value="">
+                                                    {purposeLoading
+                                                        ? "Loading purposes..."
+                                                        : "Select Purpose"}
+                                                </option>
+
+                                                {purposes.map((purpose) => (
+                                                    <option
+                                                        key={purpose.id}
+                                                        value={purpose.id}
+                                                    >
+                                                        {purpose.code} - {purpose.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            {!purposeLoading && purposes.length === 0 && (
+                                                <p className="text-xs text-red-500 mt-1">
+                                                    No approved and active purposes available.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Exit */}
                                         <FormInput
                                             label="Expected Exit"
                                             required
                                             type="datetime-local"
-                                            value={form.expected_exit_at}
-                                            onChange={(value) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    expected_exit_at: value,
-                                                }))
+                                            value={
+                                                form.expected_exit_at
+                                            }
+                                            onChange={(
+                                                value
+                                            ) =>
+                                                setForm(
+                                                    (
+                                                        prev
+                                                    ) => ({
+                                                        ...prev,
+                                                        expected_exit_at:
+                                                            value,
+                                                    })
+                                                )
                                             }
                                         />
 
+                                        {/* Return */}
                                         <FormInput
                                             label="Expected Return"
                                             type="datetime-local"
-                                            value={form.expected_return_at}
-                                            onChange={(value) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    expected_return_at: value,
-                                                }))
+                                            value={
+                                                form.expected_return_at
+                                            }
+                                            onChange={(
+                                                value
+                                            ) =>
+                                                setForm(
+                                                    (
+                                                        prev
+                                                    ) => ({
+                                                        ...prev,
+                                                        expected_return_at:
+                                                            value,
+                                                    })
+                                                )
                                             }
                                         />
+
                                     </div>
 
+                                    {/* Remarks */}
                                     <div className="mt-4">
+
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Remarks
                                         </label>
 
                                         <textarea
-                                            value={form.remarks}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    remarks:
-                                                        e.target.value,
-                                                }))
+                                            value={
+                                                form.remarks
                                             }
-                                            rows={3}
+                                            onChange={(
+                                                e
+                                            ) =>
+                                                setForm(
+                                                    (
+                                                        prev
+                                                    ) => ({
+                                                        ...prev,
+                                                        remarks:
+                                                            e
+                                                                .target
+                                                                .value,
+                                                    })
+                                                )
+                                            }
+                                            rows={
+                                                3
+                                            }
                                             placeholder="Additional remarks..."
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"
                                         />
+
                                     </div>
                                 </div>
 
                                 {/* Materials */}
-                                {form.gate_pass_type !== "Person" && (
+                                {form.gate_pass_type !==
+                                    "Person" && (
                                     <div className="rounded-2xl border border-gray-100 bg-white">
+
                                         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+
                                             <div className="flex items-center gap-2">
+
                                                 <Package
-                                                    size={17}
+                                                    size={
+                                                        17
+                                                    }
                                                     className="text-indigo-600"
                                                 />
 
@@ -1540,45 +2297,67 @@ export default function GatePass() {
                                                     </h4>
 
                                                     <p className="text-xs text-gray-400 mt-0.5">
-                                                        Products or assets being
-                                                        taken outside
+                                                        Products or assets being taken outside
                                                     </p>
                                                 </div>
+
                                             </div>
 
                                             <button
                                                 type="button"
-                                                onClick={addItem}
+                                                onClick={
+                                                    addItem
+                                                }
                                                 className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition"
                                             >
-                                                <Plus size={16} />
+                                                <Plus
+                                                    size={
+                                                        16
+                                                    }
+                                                />
+
                                                 Add Item
                                             </button>
+
                                         </div>
 
                                         <div className="p-5 space-y-4">
-                                            {form.items.length === 0 ? (
+
+                                            {form.items.length ===
+                                            0 ? (
                                                 <div className="py-8 text-center border border-dashed border-gray-200 rounded-xl">
+
                                                     <Package
-                                                        size={28}
+                                                        size={
+                                                            28
+                                                        }
                                                         className="mx-auto text-gray-300"
                                                     />
 
                                                     <p className="mt-2 text-sm text-gray-500">
                                                         No material items added.
                                                     </p>
+
                                                 </div>
                                             ) : (
                                                 form.items.map(
-                                                    (item, index) => (
+                                                    (
+                                                        item,
+                                                        index
+                                                    ) => (
                                                         <div
-                                                            key={index}
+                                                            key={
+                                                                index
+                                                            }
                                                             className="p-4 rounded-2xl border border-gray-100 bg-gray-50/60"
                                                         >
+
                                                             <div className="flex items-center justify-between mb-4">
+
                                                                 <p className="text-sm font-bold text-gray-700">
                                                                     Item{" "}
-                                                                    {index + 1}
+                                                                    {index +
+                                                                        1}
                                                                 </p>
 
                                                                 <button
@@ -1596,13 +2375,17 @@ export default function GatePass() {
                                                                         }
                                                                     />
                                                                 </button>
+
                                                             </div>
 
                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                                                                {/* Product */}
                                                                 <div className="lg:col-span-2">
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Product /
-                                                                        Material
+                                                                        Product / Material
+
                                                                         <span className="text-red-500 ml-1">
                                                                             *
                                                                         </span>
@@ -1627,9 +2410,12 @@ export default function GatePass() {
                                                                         placeholder="Laptop"
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
 
+                                                                {/* Quantity */}
                                                                 <div>
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
                                                                         Quantity
                                                                     </label>
@@ -1656,9 +2442,12 @@ export default function GatePass() {
                                                                         }
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
 
+                                                                {/* Unit */}
                                                                 <div>
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
                                                                         Unit
                                                                     </label>
@@ -1682,9 +2471,12 @@ export default function GatePass() {
                                                                         placeholder="Pcs"
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
 
+                                                                {/* Asset */}
                                                                 <div>
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
                                                                         Asset No
                                                                     </label>
@@ -1708,9 +2500,12 @@ export default function GatePass() {
                                                                         placeholder="IT-LAP-025"
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
 
+                                                                {/* Serial */}
                                                                 <div>
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
                                                                         Serial No
                                                                     </label>
@@ -1734,12 +2529,14 @@ export default function GatePass() {
                                                                         placeholder="Serial number"
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
 
+                                                                {/* Remarks */}
                                                                 <div className="md:col-span-2 lg:col-span-3">
+
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-2">
-                                                                        Item
-                                                                        Remarks
+                                                                        Item Remarks
                                                                     </label>
 
                                                                     <input
@@ -1761,22 +2558,32 @@ export default function GatePass() {
                                                                         placeholder="Item remarks"
                                                                         className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                                     />
+
                                                                 </div>
+
                                                             </div>
                                                         </div>
                                                     )
                                                 )
                                             )}
+
                                         </div>
                                     </div>
                                 )}
+
                             </div>
 
+                            {/* Footer */}
                             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 shrink-0">
+
                                 <button
                                     type="button"
-                                    onClick={closeModal}
-                                    disabled={saving}
+                                    onClick={
+                                        closeModal
+                                    }
+                                    disabled={
+                                        saving
+                                    }
                                     className="px-5 h-11 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-100 transition disabled:opacity-50"
                                 >
                                     Cancel
@@ -1785,27 +2592,30 @@ export default function GatePass() {
                                 <button
                                     type="submit"
                                     disabled={
-                                        saving ||
-                                        userInfoLoading ||
-                                        !form.department_name ||
-                                        !form.designation_name
+                                        saving
                                     }
                                     className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm transition disabled:opacity-60"
                                 >
                                     {saving ? (
                                         <>
                                             <RefreshCw
-                                                size={16}
+                                                size={
+                                                    16
+                                                }
                                                 className="animate-spin"
                                             />
+
                                             Saving...
                                         </>
-                                    ) : editingId ? (
-                                        "Update"
                                     ) : (
-                                        "Create"
+                                        <>
+                                            {editingId
+                                                ? "Update"
+                                                : "Create"}
+                                        </>
                                     )}
                                 </button>
+
                             </div>
                         </form>
                     </div>
@@ -1827,15 +2637,23 @@ function TableFilterInput({
     placeholder = "",
 }: {
     value: string;
-    onChange: (value: string) => void;
+    onChange: (
+        value: string
+    ) => void;
     placeholder?: string;
 }) {
     return (
         <input
             type="text"
             value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
+            onChange={(e) =>
+                onChange(
+                    e.target.value
+                )
+            }
+            placeholder={
+                placeholder
+            }
             className="w-full h-8 px-2.5 rounded-md border border-gray-200 bg-white text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
         />
     );
@@ -1857,44 +2675,69 @@ function SortableHeader({
     title: string;
     field: string;
     sortField: string | null;
-    sortDirection: "asc" | "desc" | null;
-    onSort: (field: string) => void;
+    sortDirection:
+        | "asc"
+        | "desc"
+        | null;
+    onSort: (
+        field: string
+    ) => void;
 }) {
-    const active = sortField === field;
+    const active =
+        sortField === field;
 
     return (
         <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">
+
             <button
                 type="button"
-                onClick={() => onSort(field)}
+                onClick={() =>
+                    onSort(field)
+                }
                 className="inline-flex items-center gap-1 hover:text-indigo-600 transition"
             >
                 {title}
 
                 {!active && (
                     <span className="inline-flex flex-col text-gray-300">
-                        <ChevronUp size={11} />
+                        <ChevronUp
+                            size={
+                                11
+                            }
+                        />
+
                         <ChevronDown
-                            size={11}
+                            size={
+                                11
+                            }
                             className="-mt-1"
                         />
                     </span>
                 )}
 
-                {active && sortDirection === "asc" && (
-                    <ChevronUp
-                        size={14}
-                        className="text-indigo-600"
-                    />
-                )}
+                {active &&
+                    sortDirection ===
+                        "asc" && (
+                        <ChevronUp
+                            size={
+                                14
+                            }
+                            className="text-indigo-600"
+                        />
+                    )}
 
-                {active && sortDirection === "desc" && (
-                    <ChevronDown
-                        size={14}
-                        className="text-indigo-600"
-                    />
-                )}
+                {active &&
+                    sortDirection ===
+                        "desc" && (
+                        <ChevronDown
+                            size={
+                                14
+                            }
+                            className="text-indigo-600"
+                        />
+                    )}
             </button>
+
         </th>
     );
 }
@@ -1917,26 +2760,38 @@ function FormInput({
     required?: boolean;
     type?: string;
     value: string;
-    onChange: (value: string) => void;
+    onChange: (
+        value: string
+    ) => void;
     placeholder?: string;
 }) {
     return (
         <div>
+
             <label className="block text-sm font-semibold text-gray-700 mb-2">
                 {label}
 
                 {required && (
-                    <span className="text-red-500 ml-1">*</span>
+                    <span className="text-red-500 ml-1">
+                        *
+                    </span>
                 )}
             </label>
 
             <input
                 type={type}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={placeholder}
+                onChange={(e) =>
+                    onChange(
+                        e.target.value
+                    )
+                }
+                placeholder={
+                    placeholder
+                }
                 className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
             />
+
         </div>
     );
 }
@@ -1971,6 +2826,7 @@ function TypeOption({
             }`}
         >
             <div className="flex items-center gap-3">
+
                 <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                         active
@@ -1982,6 +2838,7 @@ function TypeOption({
                 </div>
 
                 <div>
+
                     <p
                         className={`text-sm font-bold ${
                             active
@@ -1993,9 +2850,13 @@ function TypeOption({
                     </p>
 
                     <p className="text-xs text-gray-400 mt-0.5">
-                        {description}
+                        {
+                            description
+                        }
                     </p>
+
                 </div>
+
             </div>
         </button>
     );
@@ -2010,12 +2871,21 @@ function TypeOption({
 function TypeBadge({
     type,
 }: {
-    type: "Person" | "Person With Material";
+    type:
+        | "Person"
+        | "Person With Material";
 }) {
-    if (type === "Person") {
+    if (
+        type === "Person"
+    ) {
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-semibold whitespace-nowrap">
-                <UserRound size={12} />
+                <UserRound
+                    size={
+                        12
+                    }
+                />
+
                 Person
             </span>
         );
@@ -2023,7 +2893,12 @@ function TypeBadge({
 
     return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-xs font-semibold whitespace-nowrap">
-            <UsersRound size={12} />
+            <UsersRound
+                size={
+                    12
+                }
+            />
+
             Person + Material
         </span>
     );
@@ -2051,21 +2926,25 @@ function StatusBadge({
             className:
                 "bg-yellow-50 text-yellow-700 border-yellow-100",
         },
+
         Approved: {
             label: "Approved",
             className:
                 "bg-green-50 text-green-700 border-green-100",
         },
+
         Rejected: {
             label: "Rejected",
             className:
                 "bg-red-50 text-red-700 border-red-100",
         },
+
         Cancelled: {
             label: "Cancelled",
             className:
                 "bg-gray-50 text-gray-600 border-gray-200",
         },
+
         Completed: {
             label: "Completed",
             className:
@@ -2073,13 +2952,16 @@ function StatusBadge({
         },
     };
 
-    const item = config[status];
+    const item =
+        config[status];
 
     return (
         <span
             className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold whitespace-nowrap ${item.className}`}
         >
-            {item.label}
+            {
+                item.label
+            }
         </span>
     );
 }
@@ -2090,22 +2972,34 @@ function StatusBadge({
 |--------------------------------------------------------------------------
 */
 
-function formatDateTime(value: string) {
-    if (!value) return "--";
+function formatDateTime(
+    value: string
+) {
+    if (!value) {
+        return "--";
+    }
 
-    const date = new Date(value);
+    const date =
+        new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
         return value;
     }
 
-    return date.toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+    return date.toLocaleString(
+        "en-GB",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }
+    );
 }
 
 /*
@@ -2114,20 +3008,49 @@ function formatDateTime(value: string) {
 |--------------------------------------------------------------------------
 */
 
-function formatDateTimeForInput(value: string) {
-    if (!value) return "";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return value.slice(0, 16);
+function formatDateTimeForInput(
+    value: string
+) {
+    if (!value) {
+        return "";
     }
 
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const date =
+        new Date(value);
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+        return value.slice(
+            0,
+            16
+        );
+    }
+
+    const year =
+        date.getFullYear();
+
+    const month =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
+
+    const day =
+        String(
+            date.getDate()
+        ).padStart(2, "0");
+
+    const hours =
+        String(
+            date.getHours()
+        ).padStart(2, "0");
+
+    const minutes =
+        String(
+            date.getMinutes()
+        ).padStart(2, "0");
 
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

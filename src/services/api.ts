@@ -1,8 +1,8 @@
 import axios from "axios";
 import { getToken, getCurrentMenu } from "./storage";
 
-// const api = axios.create({ baseURL: "http://127.0.0.1:8000/api",});
-const api = axios.create({ baseURL: "https://admin-support.madinamaritime.com/api",});
+const api = axios.create({ baseURL: "http://127.0.0.1:8000/api",});
+// const api = axios.create({ baseURL: "https://admin-support.madinamaritime.com/api",});
 
 api.interceptors.request.use(
     (config) => {
