@@ -1,3 +1,4 @@
+import { hasPermission } from "../../../services/permissions";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -275,7 +276,7 @@ export default function MeetingForm() {
     useEffect(() => {
         let active = true;
 
-        api.get("/admin/users")
+        api.get("/lookups/users")
             .then(({ data }) => {
                 if (!active) return;
 
@@ -300,7 +301,7 @@ export default function MeetingForm() {
                 if (active) setUsersLoading(false);
             });
 
-        api.get("/hrm/departments", {
+        api.get("/lookups/departments", {
             params: {
                 per_page: 100,
                 sort_by: "name",
@@ -584,12 +585,13 @@ export default function MeetingForm() {
                                             )
                                         }
                                     >
+                                        <option value="draft">Draft</option>
                                         <option value="scheduled">Scheduled</option>
-                                        <option value="in_progress">
+                                        {isEdit && <><option value="in_progress">
                                             In Progress
                                         </option>
                                         <option value="completed">Completed</option>
-                                        <option value="cancelled">Cancelled</option>
+                                        <option value="cancelled">Cancelled</option></>}
                                     </select>
                                 </div>
 
@@ -649,7 +651,7 @@ export default function MeetingForm() {
                                     </div>
                                 </div>
 
-                                <SearchableDropdown
+                                {hasPermission("meeting.manage-all") && <SearchableDropdown
                                     label="Organizer"
                                     placeholder="Select organizer"
                                     searchPlaceholder="Type to search organizer..."
@@ -660,7 +662,7 @@ export default function MeetingForm() {
                                     onChange={(value) =>
                                         updateField("organizer_id", value)
                                     }
-                                />
+                                />}
 
                                 <SearchableDropdown
                                     label="Chairperson"

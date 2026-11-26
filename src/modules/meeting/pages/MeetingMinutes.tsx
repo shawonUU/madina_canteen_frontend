@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import { hasPermission } from "../../../services/permissions";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -167,7 +169,7 @@ export default function MeetingMinutes() {
 
         try {
             const response = await api.get(
-                "/meeting-management/meetings",
+                "/meeting-management/meetings?options=1",
                 {
                     params: {
                         per_page: 100,
@@ -323,6 +325,7 @@ export default function MeetingMinutes() {
     };
 
     const handleApprove = async () => {
+        if (!hasPermission("meeting.minutes.approve")) { setPageError("You do not have permission to approve meeting minutes."); return; }
         if (!selectedMeetingId || !minutes) {
             setPageError("Please save the meeting minutes first.");
             return;
@@ -619,7 +622,7 @@ export default function MeetingMinutes() {
                                     </div>
                                 </div>
 
-                                <StatusBadge status={minutes?.status} />
+                                <div className="flex items-center gap-2"><StatusBadge status={minutes?.status} />{minutes?.id && <DataLogButton resource="meeting_minutes" recordId={minutes.id} />}</div>
                             </div>
 
                             {minutesLoading ? (
@@ -792,6 +795,7 @@ export default function MeetingMinutes() {
                                                     void handleApprove()
                                                 }
                                                 disabled={
+                                                    !hasPermission("meeting.minutes.approve") ||
                                                     !minutes ||
                                                     isApproved ||
                                                     saving ||

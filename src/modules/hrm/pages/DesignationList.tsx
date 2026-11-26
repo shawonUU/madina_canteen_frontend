@@ -1,3 +1,5 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
 import {
     Plus,
     Pencil,
@@ -130,6 +132,9 @@ function normalizeList<T>(responseData: any): {
 }
 
 export default function DesignationPage() {
+  const canCreate = canAccess("hrm", "configuration", "designation-list", "create");
+  const canDelete = canAccess("hrm", "configuration", "designation-list", "delete");
+  const canUpdate = canAccess("hrm", "configuration", "designation-list", "update");
     const [openSidebar, setOpenSidebar] = useState(false);
     const [designations, setDesignations] = useState<Designation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -468,21 +473,22 @@ export default function DesignationPage() {
             {
                 id: "actions",
                 header: "Actions",
-                size: 110,
-                minSize: 110,
+                size: 175,
+                minSize: 175,
                 enableSorting: false,
                 enableColumnFilter: false,
                 Cell: ({ row }) => (
                     <div className="flex items-center gap-1">
-                        <button
+<DataLogButton resource="designations" recordId={row.original.id} />
+                        {canUpdate && (<button
                             type="button"
                             onClick={() => openEditModal(row.original)}
                             title="Edit designation"
                             className="flex h-8 w-8 items-center justify-center rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                         >
                             <Pencil size={15} />
-                        </button>
-                        <button
+                        </button>)}
+                        {canDelete && (<button
                             type="button"
                             onClick={() => void handleDelete(row.original)}
                             disabled={deletingId === row.original.id}
@@ -494,12 +500,12 @@ export default function DesignationPage() {
                             ) : (
                                 <Trash2 size={15} />
                             )}
-                        </button>
+                        </button>)}
                     </div>
                 ),
             },
         ],
-        [pagination.pageIndex, pagination.pageSize, deletingId],
+        [pagination.pageIndex, pagination.pageSize, deletingId, canUpdate, canDelete],
     );
 
     const table = useMantineReactTable({
@@ -511,6 +517,7 @@ export default function DesignationPage() {
         rowCount: totalRecords,
         pageCount: lastPage,
         enableColumnFilters: true,
+        initialState: { showColumnFilters: true },
         enableGlobalFilter: false,
         enableColumnFilterModes: false,
         enableColumnActions: false,
@@ -636,14 +643,14 @@ export default function DesignationPage() {
                                 />
                                 Refresh
                             </button>
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
                             >
                                 <Plus size={17} />
                                 Add Designation
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 

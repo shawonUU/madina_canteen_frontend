@@ -1,64 +1,50 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { api, ErrorMessage, LoadingState, normalizeList, secondaryButtonClass, SupportLayout, TicketTable } from "./_support";
-import type { SupportTicket } from "./_support";
+import { api, ErrorMessage, normalizeList, secondaryButtonClass, SupportLayout, TicketTable } from "./_support";
+import type { SupportTicket, TicketFilters } from "./_support";
+import { canAccess } from "../../../services/permissions";
 
-export default function TicketList() {
+export default function TicketList({ scope = "mine", title = "My Tickets" }: { scope?: "mine" | "assigned" | "all"; title?: string }) {
     const navigate = useNavigate();
     const [tickets, setTickets] = useState<SupportTicket[]>([]);
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [search, setSearch] = useState("");
-    const [status, setStatus] = useState("");
-    const [priority, setPriority] = useState("");
+    const [filters, setFilters] = useState<TicketFilters>({});
     const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(15);
+    const [perPage, setPerPage] = useState(25);
     const [total, setTotal] = useState(0);
     const [lastPage, setLastPage] = useState(1);
     const [refreshKey, setRefreshKey] = useState(0);
-
+    const sequence = useRef(0);
     const fetchTickets = useCallback(async () => {
+        const requestId = ++sequence.current;
         setLoading(true); setError("");
         try {
-            const params: Record<string, string | number> = { page, per_page: perPage };
-            if (search.trim()) params.search = search.trim();
-            if (status) params.status = status;
-            if (priority) params.priority = priority;
-            const response = await api.get("/support/tickets", { params });
+            const response = await api.get("/support/tickets", { params: { scope, page, per_page: perPage, search: search.trim(), filter: filters } });
+            if (requestId !== sequence.current) return;
             const result = normalizeList<SupportTicket>(response.data);
-            setTickets(result.records); setTotal(result.meta.total ?? result.records.length); setLastPage(result.meta.last_page ?? 1);
+            setTickets(result.records); setTotal(result.meta.total ?? 0); setLastPage(result.meta.last_page ?? 1);
         } catch (err: any) {
-            setError(err?.response?.data?.message || "Tickets could not be loaded.");
-        } finally { setLoading(false); setRefreshing(false); }
-    }, [page, perPage, search, status, priority, refreshKey]);
-
-    useEffect(() => { void fetchTickets(); }, [fetchTickets]);
-    const clearFilters = () => { setSearch(""); setStatus(""); setPriority(""); setPage(1); };
-    const hasFilters = Boolean(search || status || priority);
-
-    return <SupportLayout title="Ticket List" description="Search and manage support tickets available to your account."
-        actions={<><button type="button" onClick={() => { setRefreshing(true); setRefreshKey(v => v + 1); }} disabled={loading} className={secondaryButtonClass}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""} /> Refresh</button><button type="button" onClick={() => navigate("/support/create-ticket")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"><Plus size={16} /> Create Ticket</button></>}>
+            if (requestId === sequence.current) setError(err?.response?.data?.message || "Tickets could not be loaded.");
+        } finally { if (requestId === sequence.current) setLoading(false); }
+    }, [scope, page, perPage, search, filters]);
+    useEffect(() => { const timer = setTimeout(() => void fetchTickets(), 250); return () => { clearTimeout(timer); sequence.current++; }; }, [fetchTickets, refreshKey]);
+    useEffect(() => { setPage(1); setFilters({}); setSearch(""); }, [scope]);
+    const clearFilters = () => { setSearch(""); setFilters({}); setPage(1); };
+    const changeFilter = (key: string, value: string) => { setFilters(current => ({ ...current, [key]: value })); setPage(1); };
+    const mayCreate = canAccess("support", "create-ticket", null, "create");
+    const mayEdit = ["my-tickets", "create-ticket", "my-assigned-tickets", "all-tickets"]
+        .some(menu => canAccess("support", menu, null, "update"));
+    return <SupportLayout title={title} description={scope === "assigned" ? "Tickets assigned to your account." : scope === "mine" ? "Support requests submitted by you." : "Support tickets available to your account."}
+        actions={<><button type="button" onClick={() => setRefreshKey(v => v + 1)} disabled={loading} className={secondaryButtonClass}><RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh</button>{mayCreate && <button type="button" onClick={() => navigate("/support/create-ticket")} className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white"><Plus size={16} /> Create Ticket</button>}</>}>
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div><h2 className="font-bold text-slate-900">Support Tickets</h2><p className="mt-1 text-sm text-slate-500">{total.toLocaleString()} total records</p></div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:flex">
-                    <div className="relative sm:w-64"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search ticket number or subject..." className="h-10 w-full rounded-lg border border-slate-300 pl-9 pr-8 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />{search && <button type="button" onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"><X size={14} /></button>}</div>
-                    <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">All statuses</option>{["open","assigned","in_progress","waiting_for_user","resolved","closed","reopened"].map(s => <option key={s} value={s}>{s.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase())}</option>)}</select>
-                    <select value={priority} onChange={e => { setPriority(e.target.value); setPage(1); }} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">All priorities</option>{["low","medium","high","critical"].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}</select>
-                    <button type="button" onClick={clearFilters} disabled={!hasFilters} className={secondaryButtonClass}><X size={14} /> Clear</button>
-                </div>
-            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div><h2 className="font-bold text-slate-900">{title}</h2><p className="mt-1 text-sm text-slate-500">{total.toLocaleString()} matching records</p></div><div className="flex gap-2"><div className="relative"><Search size={16} className="absolute left-3 top-3 text-slate-400" /><input aria-label="Search tickets" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search ticket number or subject" className="h-10 w-64 rounded-lg border border-slate-300 pl-9 pr-3 text-sm" /></div><button type="button" onClick={clearFilters} className={secondaryButtonClass}><X size={14} /> Clear</button></div></div>
             <ErrorMessage message={error} onRetry={fetchTickets} />
-            {loading ? <LoadingState label="Loading tickets..." /> : 
-                  <TicketTable
-                        tickets={tickets}
-                        onView={ticket => navigate(`/support/view-ticket/${ticket.id}`)}
-                        onEdit={ticket => navigate(`/support/edit-ticket/${ticket.id}`)}
-                    />
-            }
-            <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-slate-500"><span>Rows per page</span><select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }} className="rounded-md border border-slate-300 bg-white px-2 py-1.5"><option value={10}>10</option><option value={15}>15</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select><span>· {total} records</span></div><div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className={secondaryButtonClass}>Previous</button><span className="whitespace-nowrap text-slate-600">Page {page} of {lastPage}</span><button type="button" disabled={page >= lastPage || loading} onClick={() => setPage(p => p + 1)} className={secondaryButtonClass}>Next</button></div></div>
+            {loading && <p role="status" className="px-4 py-2 text-sm text-slate-500">Loading tickets…</p>}
+            <TicketTable tickets={tickets} filters={filters} onFilter={changeFilter} onView={ticket => navigate(`/support/view-ticket/${ticket.id}`)} onEdit={scope === "mine" && mayEdit ? ticket => navigate(`/support/edit-ticket/${ticket.id}`) : undefined} />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm"><label>Rows per page <select aria-label="Rows per page" value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }} className="ml-2 rounded border border-slate-300 p-2">{[10,25,50,100].map(size => <option key={size} value={size}>{size}</option>)}</select></label><div className="flex items-center gap-3"><button disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className={secondaryButtonClass}>Previous</button><span>Page {page} of {lastPage}</span><button disabled={page >= lastPage || loading} onClick={() => setPage(p => p + 1)} className={secondaryButtonClass}>Next</button></div></div>
         </div>
     </SupportLayout>;
 }

@@ -1,3 +1,4 @@
+import api from "../../../../services/api";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -14,22 +15,19 @@ function ForgotPassword() {
 
 
 
-    const handleSubmit=(e:React.FormEvent)=>{
-
-        e.preventDefault();
-
-
-        console.log({
-            email
-        });
-
-
-        // Forgot password API call here
-
+    const [sending, setSending] = useState(false);
+    const [message, setMessage] = useState("");
+    const [error, setError] = useState("");
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setSending(true); setMessage(""); setError("");
+        try {
+            const response = await api.post("/auth/forgot-password", { email: email.trim() });
+            setMessage(response.data.message ?? "If this email is registered, a password reset link will be sent.");
+        } catch (error: any) {
+            setError(error?.response?.data?.message ?? "Unable to request a password reset. Please try again.");
+        } finally { setSending(false); }
     };
-
-
-
 
     return (
 
@@ -117,6 +115,8 @@ function ForgotPassword() {
 
 
 
+                {message && <p role="status" className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
+                {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
                 <form
                     onSubmit={handleSubmit}
                     className="space-y-5"
@@ -202,7 +202,7 @@ function ForgotPassword() {
 
                     <button
 
-                        type="submit"
+                        type="submit" disabled={sending}
 
                         className="
                             w-full
@@ -220,7 +220,7 @@ function ForgotPassword() {
 
                     >
 
-                        Send Reset Link
+                        {sending ? "Sending…" : "Send Reset Link"}
 
                     </button>
 

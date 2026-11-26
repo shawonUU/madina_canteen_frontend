@@ -1,3 +1,5 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
 import {
     Plus,
     Pencil,
@@ -10,7 +12,7 @@ import {
     UsersRound,
     FileDown,
     Filter,
-    FunnelX,
+    FilterX as FunnelX,
     ChevronUp,
     ChevronDown,
     ChevronLeft,
@@ -48,7 +50,7 @@ interface GatePassPurpose {
 
 interface GatePassData {
     id: number;
-    pass_no: string;
+    code: string;
     gate_pass_type:
         | "Person"
         | "Person With Material";
@@ -96,7 +98,7 @@ interface GatePassForm {
 }
 
 interface GatePassFilters {
-    pass_no: string;
+    code: string;
     gate_pass_type: string;
     requester: string;
     department_name: string;
@@ -173,7 +175,7 @@ const emptyItem: GatePassItem = {
 };
 
 const initialFilters: GatePassFilters = {
-    pass_no: "",
+    code: "",
     gate_pass_type: "",
     requester: "",
     department_name: "",
@@ -315,127 +317,6 @@ export default function GatePass() {
     |--------------------------------------------------------------------------
     */
 
-    const buildFilterOptions = () => {
-        return [
-            {
-                relation_name: null,
-                field_name: "pass_no",
-                search_param:
-                    filters.pass_no,
-                action: null,
-                order_by:
-                    sortField === "pass_no"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Pass No",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: null,
-                field_name:
-                    "gate_pass_type",
-                search_param:
-                    filters.gate_pass_type,
-                action: null,
-                order_by:
-                    sortField ===
-                    "gate_pass_type"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Type",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: "requester",
-                field_name: "name",
-                search_param:
-                    filters.requester,
-                action: null,
-                order_by:
-                    sortField === "requester"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Requested By",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: null,
-                field_name:
-                    "department_name",
-                search_param:
-                    filters.department_name,
-                action: null,
-                order_by:
-                    sortField ===
-                    "department_name"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Department",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: null,
-                field_name: "purpose",
-                search_param:
-                    filters.purpose,
-                action: null,
-                order_by:
-                    sortField === "purpose"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Purpose",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: null,
-                field_name:
-                    "expected_exit_at",
-                search_param:
-                    filters.expected_exit_at,
-                action: null,
-                order_by:
-                    sortField ===
-                    "expected_exit_at"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Exit Time",
-                filter_type: "input",
-            },
-
-            {
-                relation_name: null,
-                field_name: "status",
-                search_param:
-                    filters.status,
-                action: null,
-                order_by:
-                    sortField === "status"
-                        ? sortDirection
-                        : null,
-                date_from: null,
-                label: "Status",
-                filter_type: "input",
-            },
-        ];
-    };
-
-    /*
-    |--------------------------------------------------------------------------
-    | Fetch Gate Pass Purposes
-    |--------------------------------------------------------------------------
-    */
-
     const fetchPurposes = useCallback(async () => {
         try {
             setPurposeLoading(true);
@@ -492,126 +373,25 @@ export default function GatePass() {
                     setLoading(true);
                 }
 
-                const data = {
-                    business_unit: "MML",
-                    items_per_page:
-                        itemsPerPage,
-                    page: requestedPage,
-                    isFilter: true,
-                    filter_options:
-                        buildFilterOptions(),
-                };
-
-                const response =
-                    await api.get(
-                        "/reception/gate-passes",
-                        {
-                            params: {
-                                page: requestedPage,
-                                items_per_page:
-                                    itemsPerPage,
-                                data: JSON.stringify(
-                                    data
-                                ),
-                            },
-                        }
-                    );
-
-                if (
-                    response.data.success
-                ) {
-                    const result =
-                        response.data.data;
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Laravel Pagination Response
-                    |--------------------------------------------------------------------------
-                    |
-                    | {
-                    |     data: [],
-                    |     current_page: 1,
-                    |     last_page: 5,
-                    |     per_page: 100,
-                    |     total: 450
-                    | }
-                    |
-                    */
-
-                    if (
-                        result &&
-                        !Array.isArray(
-                            result
-                        ) &&
-                        Array.isArray(
-                            result.data
-                        )
-                    ) {
-                        setGatePasses(
-                            result.data
-                        );
-
-                        setPagination({
-                            current_page:
-                                result.current_page ||
-                                requestedPage,
-
-                            last_page:
-                                result.last_page ||
-                                1,
-
-                            per_page:
-                                result.per_page ||
-                                itemsPerPage,
-
-                            total:
-                                result.total ||
-                                0,
-
-                            from:
-                                result.from ||
-                                null,
-
-                            to:
-                                result.to ||
-                                null,
-                        });
-                    } else if (
-                        Array.isArray(
-                            result
-                        )
-                    ) {
-                        setGatePasses(
-                            result
-                        );
-
-                        setPagination({
-                            current_page:
-                                requestedPage,
-
-                            last_page:
-                                1,
-
-                            per_page:
-                                itemsPerPage,
-
-                            total:
-                                result.length,
-
-                            from:
-                                result.length >
-                                0
-                                    ? 1
-                                    : null,
-
-                            to:
-                                result.length >
-                                0
-                                    ? result.length
-                                    : null,
-                        });
-                    }
-                }
+                const response = await api.get("/reception/gate-passes", {
+                    params: {
+                        page: requestedPage, per_page: itemsPerPage,
+                        sort_by: sortField === "department_name" ? "department" : sortField || "created_at",
+                        sort_dir: sortDirection || "desc",
+                        filter: {
+                            code: filters.code, gate_pass_type: filters.gate_pass_type,
+                            requester: filters.requester, department: filters.department_name,
+                            purpose: filters.purpose, expected_exit_at: filters.expected_exit_at,
+                            status: filters.status,
+                        },
+                    },
+                });
+                const result = response.data;
+                setGatePasses(Array.isArray(result.data) ? result.data : []);
+                const meta = result.meta ?? {};
+                setPagination({ current_page: meta.current_page ?? requestedPage,
+                    last_page: meta.last_page ?? 1, per_page: meta.per_page ?? itemsPerPage,
+                    total: meta.total ?? 0, from: meta.from ?? null, to: meta.to ?? null });
             } catch (error) {
                 console.error(
                     "Failed to load gate passes:",
@@ -1316,7 +1096,7 @@ export default function GatePass() {
                                 />
                             </button>
 
-                            <button
+                            {canAccess("reception", "gatepass", "create-gatepass-request", "create") && (<button
                                 type="button"
                                 onClick={
                                     openCreateModal
@@ -1330,7 +1110,7 @@ export default function GatePass() {
                                 />
 
                                 Add Gate Pass
-                            </button>
+                            </button>)} 
 
                         </div>
                     </div>
@@ -1426,7 +1206,7 @@ export default function GatePass() {
 
                                                 <SortableHeader
                                                     title="Pass No"
-                                                    field="pass_no"
+                                                    field="code"
                                                     sortField={
                                                         sortField
                                                     }
@@ -1525,13 +1305,13 @@ export default function GatePass() {
                                                 <th className="px-3 py-1.5">
                                                     <TableFilterInput
                                                         value={
-                                                            filters.pass_no
+                                                            filters.code
                                                         }
                                                         onChange={(
                                                             value
                                                         ) =>
                                                             handleFilterChange(
-                                                                "pass_no",
+                                                                "code",
                                                                 value
                                                             )
                                                         }
@@ -1709,7 +1489,7 @@ export default function GatePass() {
                                                             <td className="px-3 py-3">
                                                                 <span className="text-sm font-semibold text-indigo-600 whitespace-nowrap">
                                                                     {
-                                                                        gatePass.pass_no
+                                                                        gatePass.code
                                                                     }
                                                                 </span>
                                                             </td>
@@ -1824,7 +1604,8 @@ export default function GatePass() {
                                                                         />
                                                                     </button>
 
-                                                                    <button
+                                                                    <DataLogButton resource="gate_passes" recordId={gatePass.id} />
+                                                                    {canAccess("reception", "gatepass", "create-gatepass-request", "update") && (<button
                                                                         type="button"
                                                                         onClick={() =>
                                                                             openEditModal(
@@ -1839,9 +1620,9 @@ export default function GatePass() {
                                                                                 16
                                                                             }
                                                                         />
-                                                                    </button>
+                                                                    </button>)} 
 
-                                                                    <button
+                                                                    {canAccess("reception", "gatepass", "create-gatepass-request", "delete") && (<button
                                                                         type="button"
                                                                         onClick={() =>
                                                                             handleDelete(
@@ -1856,7 +1637,7 @@ export default function GatePass() {
                                                                                 16
                                                                             }
                                                                         />
-                                                                    </button>
+                                                                    </button>)} 
 
                                                                 </div>
                                                             </td>

@@ -1,3 +1,6 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../admin/components/ColumnFilters";
 import {
     Plus,
     Pencil,
@@ -45,7 +48,8 @@ interface WorkflowLevel {
     id?: number;
     level_no: number;
     name: string;
-    approver_type: "User" | "Department";
+    approver_type: "Role" | "User" | "Department Role";
+    role_id: number | null;
     user_id: number | null;
     department_id: number | null;
     min_approvers: number;
@@ -85,6 +89,7 @@ const createLevel = (levelNo: number): WorkflowLevel => ({
     name: "",
     approver_type: "User",
     user_id: null,
+    role_id: null,
     department_id: null,
     min_approvers: 1,
     is_required: true,
@@ -103,6 +108,13 @@ const initialForm: WorkflowForm = {
 };
 
 export default function ApprovalWorkflow() {
+  const canUpdate = canAccess("approval", "approval-workflow", null, "update");
+  const canCreate = canAccess("approval", "approval-workflow", null, "create");
+    const [columnFilters, setColumnFilters] = useState<Filters>({});
+    const [loadError, setLoadError] = useState("");
+    const [roles, setRoles] = useState<DepartmentData[]>([]);
+    const [navigationMenus, setNavigationMenus] = useState<MenuData[]>([]);
+    const [navigationChildren, setNavigationChildren] = useState<ChildMenuData[]>([]);
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>(
@@ -138,7 +150,7 @@ export default function ApprovalWorkflow() {
                 setLoading(true);
             }
 
-            const response = await api.get("/approval-workflows");
+            const response = await api.get("/approval-workflows", { params: { all: 1 } });
 
             if (
                 response.data.success ||
@@ -147,108 +159,34 @@ export default function ApprovalWorkflow() {
                 setWorkflows(response.data.data?.data || response.data.data || []);
             }
         } catch (error) {
-            console.error(
-                "Failed to load approval workflows:",
-                error
-            );
+            setLoadError((error as any)?.response?.data?.message ?? "Unable to load approval workflows.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    const fetchModules = async () => {
+    const fetchOptions = async () => {
         try {
-            const response = await api.get("/admin/modules");
-
-            if (response.data.success) {
-                setModules(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load modules:",
-                error
-            );
+            const [navigation, userResponse, departmentResponse, roleResponse] = await Promise.all([
+                api.get("/lookups/navigation"), api.get("/lookups/users"),
+                api.get("/lookups/departments"), api.get("/lookups/roles"),
+            ]);
+            const data = navigation.data.data;
+            setModules(data.modules ?? []);
+            setNavigationMenus(data.menus ?? []);
+            setNavigationChildren(data.child_menus ?? []);
+            setUsers(userResponse.data.data ?? []);
+            setDepartments(departmentResponse.data.data ?? []);
+            setRoles(roleResponse.data.data ?? []);
+        } catch (error: any) {
+            setLoadError(error?.response?.data?.message ?? "Unable to load approval options.");
         }
     };
+    const fetchMenus = async (moduleId: number) => setMenus(navigationMenus.filter((menu) => Number(menu.module_id) === moduleId));
+    const fetchChildMenus = async (menuId: number) => setChildMenus(navigationChildren.filter((child) => Number(child.menu_id) === menuId));
 
-
-
-    const fetchUsers = async () => {
-        try {
-            const response = await api.get("/admin/users");
-
-            if (response.data.success) {
-                setUsers(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load users:",
-                error
-            );
-        }
-    };
-
-    // const fetchDepartments = async () => {
-    //     try {
-    //         const response = await api.get("/hrm/departments");
-
-    //         if (response.data.success) {
-    //             setDepartments(response.data.data);
-    //         }
-    //     } catch (error) {
-    //         console.error(
-    //             "Failed to load departments:",
-    //             error
-    //         );
-    //     }
-    // };
-
-    const fetchMenus = async (moduleId: number) => {
-        try {
-            const response = await api.get(
-                `/admin/menus?module_id=${moduleId}`
-            );
-
-            if (response.data.success) {
-                setMenus(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load menus:",
-                error
-            );
-
-            setMenus([]);
-        }
-    };
-
-    const fetchChildMenus = async (menuId: number) => {
-        try {
-            const response = await api.get(
-                `/admin/child-menus?menu_id=${menuId}`
-            );
-
-            if (response.data.success) {
-                setChildMenus(response.data.data);
-            }
-        } catch (error) {
-            console.error(
-                "Failed to load child menus:",
-                error
-            );
-
-            setChildMenus([]);
-        }
-    };
-
-    useEffect(() => {
-        fetchWorkflows();
-        fetchModules();
-        // fetchRoles();
-        fetchUsers();
-        // fetchDepartments();
-    }, []);
+    useEffect(() => { void fetchWorkflows(); void fetchOptions(); }, []);
 
     const openCreateModal = () => {
         setEditingId(null);
@@ -295,6 +233,7 @@ export default function ApprovalWorkflow() {
                               level.level_no || index + 1,
                           user_id:
                               level.user_id || null,
+                          role_id: level.role_id || null,
                           department_id:
                               level.department_id || null,
                           min_approvers:
@@ -433,6 +372,7 @@ export default function ApprovalWorkflow() {
                     ...level,
                     approver_type: type,
                     user_id: null,
+                    role_id: null,
                     department_id: null,
                 };
             }),
@@ -477,8 +417,12 @@ export default function ApprovalWorkflow() {
                 return;
             }
 
+            if (level.approver_type !== "User" && !level.role_id) {
+                alert(`Please select role for level ${level.level_no}.`);
+                return;
+            }
             if (
-                level.approver_type === "Department" &&
+                level.approver_type === "Department Role" &&
                 !level.department_id
             ) {
                 alert(
@@ -500,6 +444,7 @@ export default function ApprovalWorkflow() {
                     form.description.trim() || null,
                 status: form.status,
                 levels: form.levels.map((level, index) => ({
+                    id: level.id ?? undefined,
                     level_no: index + 1,
                     name: level.name.trim(),
                     approver_type:
@@ -508,9 +453,10 @@ export default function ApprovalWorkflow() {
                         level.approver_type === "User"
                             ? level.user_id
                             : null,
+                    role_id: level.approver_type !== "User" ? level.role_id : null,
                     department_id:
                         level.approver_type ===
-                        "Department"
+                        "Department Role"
                             ? level.department_id
                             : null,
                     min_approvers:
@@ -536,8 +482,9 @@ export default function ApprovalWorkflow() {
                 );
             }
 
-            closeModal();
-
+            setModalOpen(false);
+            setEditingId(null);
+            setForm({ ...initialForm, levels: [createLevel(1)] });
             await fetchWorkflows(true);
         } catch (error: any) {
             console.error(
@@ -568,6 +515,7 @@ export default function ApprovalWorkflow() {
                 />
 
                 <div className="p-4 lg:p-6 overflow-y-auto h-[calc(100vh-64px)]">
+{loadError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{loadError}</p>}
 
                     {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-7">
@@ -611,14 +559,14 @@ export default function ApprovalWorkflow() {
                                 />
                             </button>
 
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
                                 <Plus size={18} />
                                 Add Workflow
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 
@@ -685,10 +633,11 @@ export default function ApprovalWorkflow() {
                                                 Action
                                             </th>
                                         </tr>
-                                    </thead>
+                                    <ColumnFilters columns={[null, {key:"workflow",label:"workflow"}, {key:"module",label:"module"}, {key:"levels",label:"levels"}, {key:"status",label:"status",options:["Active","Inactive"]}, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                                     <tbody className="divide-y divide-gray-100">
-                                        {workflows.map(
+                                        {workflows.filter((item) => matchesColumns({workflow: `${item.name} ${item.description ?? ""}`, module: item.module?.name ?? modules.find((module) => module.id === item.module_id)?.name, levels: item.levels?.length ?? 0, status:item.status}, columnFilters)).map(
                                             (
                                                 workflow,
                                                 index
@@ -773,7 +722,8 @@ export default function ApprovalWorkflow() {
 
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            <button
+<DataLogButton resource="approval_workflows" recordId={workflow.id} />
+                                                            {canUpdate && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openEditModal(
@@ -787,7 +737,7 @@ export default function ApprovalWorkflow() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1267,9 +1217,8 @@ export default function ApprovalWorkflow() {
                                                                     User
                                                                 </option>
 
-                                                                <option value="Department">
-                                                                    Department
-                                                                </option>
+                                                                <option value="Role">Role</option>
+                                                                <option value="Department Role">Department Role</option>
                                                             </select>
                                                         </div>
 
@@ -1305,6 +1254,11 @@ export default function ApprovalWorkflow() {
 
                                                     {/* Approver Selection */}
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                                        {level.approver_type !== "User" && <label className="block text-sm font-semibold text-gray-700">Role
+                                                            <select required value={level.role_id ?? ""} onChange={(event) => updateLevel(index, "role_id", event.target.value ? Number(event.target.value) : null)} className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm">
+                                                                <option value="">Select Role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                                                            </select>
+                                                        </label>}
 
                                                       
                                                         {level.approver_type ===
@@ -1368,7 +1322,7 @@ export default function ApprovalWorkflow() {
                                                         )}
 
                                                         {level.approver_type ===
-                                                            "Department" && (
+                                                            "Department Role" && (
                                                             <>
                                                                 <div>
                                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">

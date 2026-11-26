@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -10,6 +10,7 @@ import {
 import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
+import DataLogButton from "../../../components/DataLogButton";
 
 export type TicketStatus =
     | "open" | "assigned" | "in_progress" | "waiting_for_user"
@@ -158,98 +159,44 @@ export function EmptyState({ title, detail }: { title: string; detail: string })
 }
 
 
-export function TicketTable({
-    tickets,
-    onView,
-    onEdit,
-}: {
-    tickets: SupportTicket[];
-    onView: (ticket: SupportTicket) => void;
-    onEdit?: (ticket: SupportTicket) => void;
+export type TicketFilters = Record<string, string>;
+const ticketColumns = [
+    ["ticket_number", "Ticket"], ["subject", "Subject"], ["requester", "Requester"],
+    ["assignee", "Assignee"], ["priority", "Priority"], ["status", "Status"], ["created_at", "Created"],
+];
+export function TicketTable({ tickets, onView, onEdit, filters, onFilter, resolution = false }: {
+    tickets: SupportTicket[]; onView?: (ticket: SupportTicket) => void;
+    onEdit?: (ticket: SupportTicket) => void; filters?: TicketFilters;
+    onFilter?: (key: string, value: string) => void; resolution?: boolean;
 }) {
-    if (!tickets.length) {
-        return <EmptyState title="No tickets found" detail="There are no tickets matching the current view." />;
-    }
-
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-                    <tr>
-                        {["Ticket", "Subject", "Requester", "Assignee", "Priority", "Status", "Created", "Action"].map((item) => (
-                            <th key={item} className="border-b border-slate-200 px-4 py-3 font-bold">
-                                {item}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {tickets.map((ticket) => (
-                        <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-indigo-700">
-                                {ticket.ticket_number}
-                            </td>
-
-                            <td className="max-w-[250px] px-4 py-3">
-                                <p className="truncate font-semibold text-slate-800">{ticket.subject}</p>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    {formatLabel(ticket.issue_type)}
-                                    {ticket.module_name ? ` · ${ticket.module_name}` : ""}
-                                </p>
-                            </td>
-
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {ticket.submitter?.name ?? `User #${ticket.submitted_by}`}
-                            </td>
-
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {ticket.assignee?.name ?? "Unassigned"}
-                            </td>
-
-                            <td className="px-4 py-3">
-                                <PriorityBadge priority={ticket.priority} />
-                            </td>
-
-                            <td className="px-4 py-3">
-                                <StatusBadge status={ticket.status} />
-                            </td>
-
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                                {formatDate(ticket.created_at)}
-                            </td>
-
-                            <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => onView(ticket)}
-                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                    >
-                                        <Eye size={14} />
-                                        View
-                                    </button>
-
-                                    {ticket.status === "open" && onEdit && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onEdit(ticket)}
-                                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                                        >
-                                            <Pencil size={14} />
-                                            Edit
-                                        </button>
-                                    )}
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+    const [localFilters, setLocalFilters] = useState<TicketFilters>({});
+    const activeFilters = filters ?? localFilters;
+    const columns = resolution ? [...ticketColumns, ["resolved_at", "Resolved"], ["closed_at", "Closed"]] : ticketColumns;
+    const change = (key: string, value: string) => onFilter ? onFilter(key, value) : setLocalFilters(current => ({ ...current, [key]: value }));
+    const rows = useMemo(() => onFilter ? tickets : tickets.filter(ticket => Object.entries(activeFilters).every(([key, value]) => {
+        if (!value.trim()) return true;
+        const data = key === "requester" ? ticket.submitter?.name : key === "assignee" ? ticket.assignee?.name ?? "Unassigned" : ticket[key as keyof SupportTicket];
+        return String(data ?? "").toLowerCase().includes(value.toLowerCase());
+    })), [tickets, activeFilters, onFilter]);
+    return <div className="overflow-x-auto"><table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+            <tr>{columns.map(([key, title]) => <th key={key} className="border-b border-slate-200 px-4 py-3 font-bold">{title}</th>)}<th className="px-4 py-3">Actions</th></tr>
+            <tr>{columns.map(([key, title]) => <th key={key} className="border-b border-slate-200 p-2"><input aria-label={`Filter ${title}`} type={key.endsWith("_at") ? "date" : "text"} value={activeFilters[key] ?? ""} onChange={event => change(key, event.target.value)} placeholder={`Filter ${title.toLowerCase()}`} className="h-9 w-full min-w-28 rounded border border-slate-300 bg-white px-2 text-xs font-normal normal-case outline-none focus:border-indigo-500" /></th>)}<th className="p-2"><button type="button" onClick={() => columns.forEach(([key]) => change(key, ""))} className="text-xs font-semibold text-indigo-600">Clear</button></th></tr>
+        </thead>
+        <tbody>{!rows.length ? <tr><td colSpan={columns.length + 1} className="p-10 text-center text-slate-500">No tickets match these filters.</td></tr> : rows.map(ticket => <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50">
+            <td className="whitespace-nowrap px-4 py-3 font-semibold text-indigo-700">{ticket.ticket_number}</td>
+            <td className="max-w-64 px-4 py-3"><p className="truncate font-semibold text-slate-800">{ticket.subject}</p><p className="mt-1 text-xs text-slate-500">{formatLabel(ticket.issue_type)}{ticket.module_name ? ` · ${ticket.module_name}` : ""}</p></td>
+            <td className="px-4 py-3">{ticket.submitter?.name ?? `User #${ticket.submitted_by}`}</td><td className="px-4 py-3">{ticket.assignee?.name ?? "Unassigned"}</td>
+            <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} /></td><td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
+            <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatDate(ticket.created_at)}</td>
+            {resolution && <><td className="whitespace-nowrap px-4 py-3">{formatDate(ticket.resolved_at)}</td><td className="whitespace-nowrap px-4 py-3">{formatDate(ticket.closed_at)}</td></>}
+            <td className="px-4 py-3"><div className="flex items-center gap-2">{onView && <button type="button" onClick={() => onView(ticket)} className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 text-xs font-semibold text-blue-700"><Eye size={14} /> View</button>}
+                {ticket.status === "open" && onEdit && <button type="button" onClick={() => onEdit(ticket)} className="inline-flex h-8 items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 text-xs font-semibold text-indigo-700"><Pencil size={14} /> Edit</button>}
+                <DataLogButton resource="support_tickets" recordId={ticket.id} />
+            </div></td>
+        </tr>)}</tbody>
+    </table></div>;
 }
-
 
 export function StatCard({ title, value, detail, icon, tone = "indigo" }: { title: string; value: number | string; detail: string; icon: ReactNode; tone?: "indigo" | "blue" | "amber" | "green" | "red" }) {
     const tones = {

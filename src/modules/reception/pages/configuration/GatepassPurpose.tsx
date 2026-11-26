@@ -1,3 +1,5 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
 
 import {
     Plus,
@@ -7,7 +9,7 @@ import {
     RefreshCw,
     ShieldCheck,
     Filter,
-    FunnelX,
+    FilterX as FunnelX,
     ChevronUp,
     ChevronDown,
     ChevronLeft,
@@ -48,6 +50,7 @@ interface PurposeForm {
 }
 
 interface PurposeFilters {
+    created_at: string;
     code: string;
     name: string;
     approval_status: string;
@@ -70,6 +73,7 @@ const initialForm: PurposeForm = {
 };
 
 const initialFilters: PurposeFilters = {
+    created_at: "",
     code: "",
     name: "",
     approval_status: "",
@@ -165,6 +169,7 @@ export default function GatepassPurpose() {
                             per_page: itemsPerPage,
                             search_code: filters.code,
                             search_name: filters.name,
+                            created_at: filters.created_at,
                             approval_status: filters.approval_status,
                             is_active: filters.is_active,
                             sort_field: sortField,
@@ -546,14 +551,14 @@ export default function GatepassPurpose() {
                                 />
                             </button>
 
-                            <button
+                            {canAccess("reception", "configuration", "gatepass-purpose", "create") && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
                                 <Plus size={18} />
                                 Add Purpose
-                            </button>
+                            </button>)} 
 
                         </div>
                     </div>
@@ -769,9 +774,7 @@ export default function GatepassPurpose() {
                                                 </th>
 
                                                 <th className="px-3 py-1.5">
-                                                    <div className="text-xs text-gray-400 text-center">
-                                                        --
-                                                    </div>
+                                                    <input aria-label="Filter created date" value={filters.created_at} onChange={(event) => handleFilterChange("created_at", event.target.value)} placeholder="YYYY-MM-DD" className="w-full h-8 px-2 rounded-md border border-gray-200 bg-white text-xs text-gray-600" />
                                                 </th>
 
                                                 <th className="px-3 py-1.5">
@@ -860,7 +863,8 @@ export default function GatepassPurpose() {
                                                             <td className="px-3 py-3">
                                                                 <div className="flex items-center justify-end gap-1.5">
 
-                                                                    <button
+                                                                    <DataLogButton resource="gate_pass_purposes" recordId={purpose.id} />
+                                                                    {canAccess("reception", "configuration", "gatepass-purpose", "update") && (<button
                                                                         type="button"
                                                                         onClick={() =>
                                                                             openEditModal(purpose)
@@ -869,9 +873,9 @@ export default function GatepassPurpose() {
                                                                         title="Edit"
                                                                     >
                                                                         <Pencil size={16} />
-                                                                    </button>
+                                                                    </button>)} 
 
-                                                                    <button
+                                                                    {canAccess("reception", "configuration", "gatepass-purpose", "delete") && (<button
                                                                         type="button"
                                                                         onClick={() =>
                                                                             handleDelete(purpose.id)
@@ -880,7 +884,7 @@ export default function GatepassPurpose() {
                                                                         title="Delete"
                                                                     >
                                                                         <Trash2 size={16} />
-                                                                    </button>
+                                                                    </button>)} 
 
                                                                 </div>
                                                             </td>

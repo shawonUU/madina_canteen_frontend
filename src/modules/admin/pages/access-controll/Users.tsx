@@ -1,3 +1,6 @@
+import { canAccess, hasPermission } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../components/ColumnFilters";
 
 import {
   Plus,
@@ -16,7 +19,10 @@ import SideNav from "../../../../components/side-nav";
 import TopNav from "../../../../components/top-nav";
 import api from "../../../../services/api";
 
+interface RoleOption { id: number; name: string; is_active?: boolean; }
+
 interface User {
+  roles?: RoleOption[];
   id: number;
   name: string;
   email: string;
@@ -25,9 +31,17 @@ interface User {
 }
 
 export default function UserPage() {
+  const canDelete = canAccess("admin", "access-control", "users", "delete");
+  const canUpdate = canAccess("admin", "access-control", "users", "update");
+  const canCreate = canAccess("admin", "access-control", "users", "create");
+  const [columnFilters, setColumnFilters] = useState<Filters>({});
   const [openSidebar, setOpenSidebar] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
 
+  const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [roleIds, setRoleIds] = useState<number[]>([]);
+  const [roleSearch, setRoleSearch] = useState("");
+  const mayAssignRole = hasPermission("user.assign_role");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,6 +62,7 @@ export default function UserPage() {
 
       const response = await api.get("/admin/users");
 
+      setRoles(response.data.roles ?? []);
       setUsers(
         response.data.data?.users ??
         response.data.data ??
@@ -66,6 +81,8 @@ export default function UserPage() {
   }, []);
 
   const resetForm = () => {
+    setRoleIds([]);
+    setRoleSearch("");
     setName("");
     setEmail("");
     setPassword("");
@@ -79,6 +96,7 @@ export default function UserPage() {
   };
 
   const openEditModal = (item: User) => {
+    setRoleIds(item.roles?.map((role) => role.id) ?? []);
     setEditId(item.id);
     setName(item.name);
     setEmail(item.email);
@@ -108,12 +126,15 @@ export default function UserPage() {
       name: string;
       email: string;
       password?: string;
+      role_ids?: number[];
       status: "Active" | "Inactive";
     } = {
       name: name.trim(),
       email: email.trim(),
       status,
     };
+
+    if (mayAssignRole) payload.role_ids = roleIds;
 
     if (password.trim()) {
       payload.password = password;
@@ -229,14 +250,14 @@ export default function UserPage() {
               </p>
             </div>
 
-            <button
+            {canCreate && (<button
               type="button"
               onClick={openCreateModal}
               className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm transition"
             >
               <Plus size={18} />
               Create User
-            </button>
+            </button>)}
           </div>
 
           {/* Statistics */}
@@ -342,7 +363,7 @@ export default function UserPage() {
                   Loading users...
                 </p>
               </div>
-            ) : filteredUsers.length === 0 ? (
+            ) : users.length === 0 ? (
               <div className="py-16 text-center">
                 <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto">
                   <Users size={30} className="text-gray-300" />
@@ -380,10 +401,11 @@ export default function UserPage() {
                         Actions
                       </th>
                     </tr>
-                  </thead>
+                  <ColumnFilters columns={[null, { key: "user", label: "User" }, { key: "status", label: "Status", options: ["Active", "Inactive"] }, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                   <tbody>
-                    {filteredUsers.map((item, index) => (
+                    {filteredUsers.filter((item) => matchesColumns({user: `${item.name} ${item.email} ${item.roles?.map((role) => role.name).join(" ") ?? ""}`, status: item.status}, columnFilters)).map((item, index) => (
                       <tr
                         key={item.id}
                         className="border-b border-gray-50 hover:bg-slate-50/70 transition"
@@ -408,6 +430,7 @@ export default function UserPage() {
                                 <Mail size={13} />
                                 {item.email}
                               </div>
+                              <p className="mt-1 text-xs text-indigo-600">{item.roles?.map((role) => role.name).join(", ") || "No role assigned"}</p>
                             </div>
 
                           </div>
@@ -435,17 +458,18 @@ export default function UserPage() {
 
                         <td className="py-4 px-6">
                           <div className="flex justify-end items-center gap-2">
+<DataLogButton resource="users" recordId={item.id} />
 
-                            <button
+                            {canUpdate && (<button
                               type="button"
                               onClick={() => openEditModal(item)}
                               className="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
                               title="Edit User"
                             >
                               <Edit size={16} />
-                            </button>
+                            </button>)}
 
-                            <button
+                            {canDelete && (<button
                               type="button"
                               onClick={() => deleteUser(item.id)}
                               disabled={deletingId === item.id}
@@ -457,7 +481,7 @@ export default function UserPage() {
                               ) : (
                                 <Trash2 size={16} />
                               )}
-                            </button>
+                            </button>)}
 
                           </div>
                         </td>
@@ -619,6 +643,16 @@ export default function UserPage() {
                 )}
               </div>
 
+              {mayAssignRole && <div className="mb-4">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Roles</label>
+                <input value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)} placeholder="Search roles" className="mb-2 w-full rounded-lg border p-2 text-sm" />
+                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border p-2">
+                  {roles.filter((role) => role.name.toLowerCase().includes(roleSearch.toLowerCase())).map((role) => <label key={role.id} className="flex items-center gap-2 p-1 text-sm">
+                    <input type="checkbox" checked={roleIds.includes(role.id)} onChange={(event) => setRoleIds(event.target.checked ? [...roleIds, role.id] : roleIds.filter((id) => id !== role.id))} />{role.name}{role.is_active === false && " (Inactive)"}
+                  </label>)}
+                  {roles.length === 0 && <p className="text-xs text-slate-500">Create a role in Role Management first.</p>}
+                </div>
+              </div>}
               {/* Status */}
               <div className="flex items-center justify-between border border-gray-200 rounded-xl p-4">
 

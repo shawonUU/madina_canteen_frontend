@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import SideNav from "../components/side-nav";
 import TopNav from "../components/top-nav";
 import api from "../services/api";
+import DataLogButton from "../components/DataLogButton";
 
 
 interface Summary {
@@ -113,6 +114,8 @@ interface DashboardData {
 
 
 export default function Dashboard() {
+
+    const [bookingFilters, setBookingFilters] = useState<Record<string, string>>({});
 
     const [openSidebar, setOpenSidebar] =
         useState(false);
@@ -342,6 +345,15 @@ export default function Dashboard() {
 
     const recentBookings =
         dashboard?.recent_bookings || [];
+    const filteredBookings = recentBookings.filter(booking => {
+        const values: Record<string, string> = {
+            employee: `${getEmployeeName(booking)} ${booking.employee_id}`,
+            meal: booking.meal_type?.name || "Meal",
+            amount: String(booking.total_amount),
+            status: booking.status,
+        };
+        return Object.entries(bookingFilters).every(([key, value]) => values[key]?.toLowerCase().includes(value.trim().toLowerCase()));
+    });
 
 
     /*
@@ -1120,15 +1132,18 @@ export default function Dashboard() {
                                             <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
                                                 Status
                                             </th>
-
+                                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">History</th>
                                         </tr>
-
+                                        <tr className="bg-gray-50">
+                                            {[['employee', 'Employee'], ['meal', 'Meal'], ['amount', 'Amount'], ['status', 'Status']].map(([key, label]) => <th key={key} className="px-3 pb-3"><input aria-label={`Filter recent ${label.toLowerCase()}`} value={bookingFilters[key] ?? ''} onChange={event => setBookingFilters(current => ({ ...current, [key]: event.target.value }))} placeholder={`Filter ${label}`} className="h-9 w-full min-w-24 rounded-lg border border-gray-200 bg-white px-3 text-xs font-normal" /></th>)}
+                                            <th className="px-3 pb-3"><button type="button" onClick={() => setBookingFilters({})} className="text-xs font-semibold text-indigo-600">Clear</button></th>
+                                        </tr>
                                     </thead>
 
 
                                     <tbody className="divide-y divide-gray-100">
 
-                                        {recentBookings.map(
+                                        {filteredBookings.map(
                                             booking => (
 
                                                 <tr
@@ -1242,11 +1257,13 @@ export default function Dashboard() {
 
                                                     </td>
 
+                                                    <td className="px-6 py-4"><DataLogButton resource="employee_meals" recordId={booking.id} /></td>
                                                 </tr>
 
                                             )
                                         )}
 
+                                    {filteredBookings.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-sm text-gray-500">No recent bookings match these filters.</td></tr>}
                                     </tbody>
 
                                 </table>

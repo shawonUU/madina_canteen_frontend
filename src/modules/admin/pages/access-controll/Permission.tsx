@@ -1,3 +1,6 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../components/ColumnFilters";
 
 import {
   Plus,
@@ -46,6 +49,10 @@ interface Permission {
 }
 
 export default function PermissionPage() {
+  const canDelete = canAccess("admin", "access-control", "permission", "delete");
+  const canUpdate = canAccess("admin", "access-control", "permission", "update");
+  const canCreate = canAccess("admin", "access-control", "permission", "create");
+  const [columnFilters, setColumnFilters] = useState<Filters>({});
   const [openSidebar, setOpenSidebar] = useState(false);
 
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -76,13 +83,7 @@ export default function PermissionPage() {
     try {
       setLoading(true);
 
-      const [permissionRes, moduleRes, menuRes, childMenuRes] =
-        await Promise.all([
-          api.get("/admin/permissions"),
-          api.get("/admin/modules"),
-          api.get("/admin/menus"),
-          api.get("/admin/child-menus"),
-        ]);
+      const permissionRes = await api.get("/admin/permissions");
 
       setPermissions(
         permissionRes.data.data?.permissions ??
@@ -91,15 +92,15 @@ export default function PermissionPage() {
       );
 
       setModules(
-        moduleRes.data.data ?? []
+        permissionRes.data.data?.modules ?? []
       );
 
       setMenus(
-        menuRes.data.data ?? []
+        permissionRes.data.data?.menus ?? []
       );
 
       setChildMenus(
-        childMenuRes.data.data ?? []
+        permissionRes.data.data?.child_menus ?? []
       );
     } catch (error) {
       console.error("Failed to load permission data:", error);
@@ -313,14 +314,14 @@ export default function PermissionPage() {
               </p>
             </div>
 
-            <button
+            {canCreate && (<button
               type="button"
               onClick={openCreateModal}
               className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 transition"
             >
               <Plus size={19} />
               Create Permission
-            </button>
+            </button>)}
           </div>
 
           {/* Permission List */}
@@ -356,7 +357,7 @@ export default function PermissionPage() {
               <div className="py-12 text-center text-gray-500">
                 Loading permissions...
               </div>
-            ) : filteredPermissions.length === 0 ? (
+            ) : permissions.length === 0 ? (
               <div className="py-12 text-center">
                 <ShieldCheck
                   size={38}
@@ -386,10 +387,11 @@ export default function PermissionPage() {
                         Actions
                       </th>
                     </tr>
-                  </thead>
+                  <ColumnFilters columns={[null, { key: "permission", label: "Permission" }, { key: "location", label: "Location" }, { key: "status", label: "Status", options: ["Active", "Inactive"] }, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                   <tbody>
-                    {filteredPermissions.map((item, index) => (
+                    {filteredPermissions.filter((item) => matchesColumns({permission: `${item.name} ${item.key}`, location: `${item.module_name ?? ""} ${item.menu_name ?? ""} ${item.child_menu_name ?? ""}`, status: item.is_active ? "Active" : "Inactive"}, columnFilters)).map((item, index) => (
                       <tr
                         key={item.id}
                         className="border-b border-gray-50 hover:bg-gray-50 transition"
@@ -439,16 +441,17 @@ export default function PermissionPage() {
 
                         <td className="py-4 px-3">
                           <div className="flex justify-end gap-2">
-                            <button
+<DataLogButton resource="permissions" recordId={item.id} />
+                            {canUpdate && (<button
                               type="button"
                               onClick={() => openEditModal(item)}
                               className="bg-blue-100 p-2 rounded-lg text-blue-600 hover:bg-blue-200 transition"
                               title="Edit"
                             >
                               <Edit size={18} />
-                            </button>
+                            </button>)}
 
-                            <button
+                            {canDelete && (<button
                               type="button"
                               onClick={() => deletePermission(item.id)}
                               disabled={deletingId === item.id}
@@ -456,7 +459,7 @@ export default function PermissionPage() {
                               title="Delete"
                             >
                               <Trash2 size={18} />
-                            </button>
+                            </button>)}
                           </div>
                         </td>
                       </tr>

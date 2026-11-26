@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import RecordColumnFilters, { matchesRecordFilters } from "../components/RecordColumnFilters";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -83,6 +85,7 @@ export default function MeetingParticipants() {
 
     const [openSidebar, setOpenSidebar] = useState(false);
     const [users, setUsers] = useState<User[]>([]);
+    const [filters, setFilters] = useState<Record<string, string>>({});
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [loading, setLoading] = useState(true);
     const [usersLoading, setUsersLoading] = useState(false);
@@ -104,8 +107,8 @@ export default function MeetingParticipants() {
         setUsersLoading(true);
 
         try {
-            const response = await api.get("/admin/users");
-            setUsers(getRows(response));
+            const response = await api.get("/lookups/employees");
+            setUsers(getRows(response).map(employee => ({ ...employee, employee_id: employee.id })));
         } catch (err: any) {
             setError(
                 err?.response?.data?.message ||
@@ -166,6 +169,15 @@ export default function MeetingParticipants() {
             ? `Employee #${item.employee_id}`
             : `Participant #${item.id}`);
 
+    const participantColumns = [
+        { key: "participant", label: "Participant" }, { key: "type", label: "Type" },
+        { key: "participation", label: "Participation" }, { key: "invitation", label: "Invitation" }, { key: "attendance", label: "Attendance" },
+    ];
+    const visibleParticipants = participants.filter(item => matchesRecordFilters({
+        participant: `${participantName(item)} ${item.guest_company ?? ""} ${item.guest_email ?? ""} ${item.guest_phone ?? ""}`,
+        type: item.guest_name ? "Guest" : "Employee", participation: item.participation_type,
+        invitation: item.invitation_status, attendance: item.attendance_status ?? "unmarked",
+    }, filters));
     const resetForm = () => {
         setEmployeeId("");
         setGuestName("");
@@ -269,7 +281,7 @@ export default function MeetingParticipants() {
         try {
             await api.patch(
                 `/meeting-management/meetings/${id}/participants/${participant.id}`,
-                { [field]: value }
+                { [field]: field === "invitation_status" ? value.charAt(0).toUpperCase() + value.slice(1) : value }
             );
 
             setParticipants((current) =>
@@ -673,10 +685,11 @@ export default function MeetingParticipants() {
                                                     Action
                                                 </th>
                                             </tr>
+                                            <RecordColumnFilters columns={participantColumns} filters={filters} onChange={(key, value) => setFilters(current => ({ ...current, [key]: value }))} />
                                         </thead>
 
                                         <tbody className="divide-y divide-gray-100">
-                                            {participants.map((item) => {
+                                            {visibleParticipants.map((item) => {
                                                 const isGuest = Boolean(
                                                     item.guest_name
                                                 );
@@ -775,8 +788,8 @@ export default function MeetingParticipants() {
                                                                     )
                                                                 }
                                                             >
-                                                                <option value="pending">
-                                                                    Pending
+                                                                <option value="pending" disabled>
+                                                                    Not marked
                                                                 </option>
                                                                 <option value="present">
                                                                     Present
@@ -791,6 +804,7 @@ export default function MeetingParticipants() {
                                                         </td>
 
                                                         <td className="px-5 py-4 text-right">
+                                                            <DataLogButton resource="meeting_participants" recordId={item.id} />
                                                             <button
                                                                 type="button"
                                                                 title="Remove participant"
@@ -809,6 +823,7 @@ export default function MeetingParticipants() {
                                                     </tr>
                                                 );
                                             })}
+                                            {!visibleParticipants.length && <tr><td colSpan={6} className="p-6 text-center text-gray-500">No participants match the column filters.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>

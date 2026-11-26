@@ -1,10 +1,13 @@
+import { lazy } from "react";
+const CostReport = lazy(() => import("./pages/CostReport"));
 import ProtectedRoute from "../../app/router/ProtectedRoute";
-import DailyMealBookingReport from "../reports/pages/DailyMealBookingReport";
-import EmployeeMealBookingReport from "../reports/pages/EmployeeMealBookingReport";
-import MealItemConsumptionReport from "../reports/pages/MealItemConsumptionReport";
+const DailyMealBookingReport = lazy(() => import("../reports/pages/DailyMealBookingReport"));
+const EmployeeMealBookingReport = lazy(() => import("../reports/pages/EmployeeMealBookingReport"));
+const MealItemConsumptionReport = lazy(() => import("../reports/pages/MealItemConsumptionReport"));
 
 
 const reportsRoutes = [
+    { path: "/reports/cost", element: <ProtectedRoute roles={["admin"]}><CostReport /></ProtectedRoute> },
     {
         path: "/reports/daily",
         element: (

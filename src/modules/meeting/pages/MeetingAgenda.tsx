@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import { RecordFilterInput, matchesRecordFilters } from "../components/RecordColumnFilters";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
@@ -92,6 +94,8 @@ function getErrorMessage(error: any, fallback: string) {
 export default function MeetingAgenda() {
     const [openSidebar, setOpenSidebar] = useState(false);
     const [meetings, setMeetings] = useState<Meeting[]>([]);
+    const [filters, setFilters] = useState<Record<string, string>>({});
+    const agendaColumns = [{ key: "title", label: "Title" }, { key: "description", label: "Description" }, { key: "presenter", label: "Presenter" }, { key: "duration_minutes", label: "Duration" }, { key: "sort_order", label: "Order" }];
     const [agendas, setAgendas] = useState<Agenda[]>([]);
     const [selectedMeetingId, setSelectedMeetingId] = useState("");
     const [form, setForm] = useState<AgendaForm>(initialForm);
@@ -108,7 +112,7 @@ export default function MeetingAgenda() {
         setMeetingsLoading(true);
 
         try {
-            const response = await api.get("/meeting-management/meetings");
+            const response = await api.get("/meeting-management/meetings?options=1");
             const rows = getRows<Meeting>(response);
 
             setMeetings(rows);
@@ -709,7 +713,8 @@ export default function MeetingAgenda() {
                                         </div>
                                     ) : (
                                         <div className="divide-y divide-gray-100">
-                                            {agendas.map((agenda, index) => (
+                                            <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-5">{agendaColumns.map(column => <RecordFilterInput key={column.key} column={column} filters={filters} onChange={(key, value) => setFilters(current => ({ ...current, [key]: value }))} />)}</div>
+                                            {agendas.filter(agenda => matchesRecordFilters({ ...agenda }, filters)).map((agenda, index) => (
                                                 <div
                                                     key={agenda.id}
                                                     className="p-5 transition hover:bg-gray-50/70"
@@ -753,6 +758,7 @@ export default function MeetingAgenda() {
                                                         </div>
 
                                                         <div className="flex shrink-0 items-center gap-1">
+                                                            <DataLogButton resource="meeting_agendas" recordId={agenda.id} />
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>

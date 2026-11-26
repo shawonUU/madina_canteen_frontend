@@ -10,69 +10,22 @@ import Reception from "../../modules/reception/routes";
 import Approval from "../../modules/approval/routes";
 import meeting from "../../modules/meeting/routes";
 import support from "../../modules/support/routes";
+import ActivityLog from "../../modules/admin/pages/system-management/ActivityLog";
 
+
+const protect = (items: any[]): any[] => items.map(route => ({
+    ...route,
+    ...(route.element ? { element: <ProtectedRoute>{route.element}</ProtectedRoute> } : {}),
+    ...(route.children ? { children: protect(route.children) } : {}),
+}));
 
 export const routes = [
-
-    {
-        path: "/",
-        element: <RootRedirect />,
-    },
-    {
-        path: "/dashboard",
-        element: (
-            <ProtectedRoute roles={["admin", "manager"]}>
-                <Dashboard />
-            </ProtectedRoute>
-        ),
-    },
-
-    ...Approval,
-    ...mealRoutes,
+    { path: "/", element: <RootRedirect /> },
+    { path: "/dashboard", element: <ProtectedRoute roles={["admin", "manager"]}><Dashboard /></ProtectedRoute> },
     ...authRoutes,
-    ...reportsRoutes,
-    ...employeeRoutes,
-    ...Reception,
-    ...meeting,
-    ...support,
-
+    { path: "/admin/system-management/activity-log", element: <ProtectedRoute><ActivityLog /></ProtectedRoute> },
+    ...protect([...Approval, ...mealRoutes, ...reportsRoutes, ...employeeRoutes, ...Reception, ...meeting, ...support]),
+    { path: "*", element: <div className="p-10 text-center"><h1 className="text-2xl font-bold">Page not found</h1><a className="mt-4 inline-block text-indigo-700" href="/dashboard">Go to dashboard</a></div> },
 ];
 
 export default routes;
-
-
-// import { Navigate } from "react-router-dom";
-// import Login from "../../modules/auth/pages/Login";
-// import Register from "../../modules/auth/pages/Register";
-// import Dashboard from "../../modules/dashboard/pages/Dashboard";
-// import ProtectedRoute from "./ProtectedRoute";
-
-// const routes = [
-//     {
-//         path: "/", element: <Navigate to="/login" replace />,
-//     },
-
-//     {
-//         path: "/login", element: <Login />,
-//     },
-
-//     {
-//         path: "/register", element: <Register />,
-//     },
-
-//     {
-//         path: "/dashboard",
-//         element: (
-//             <ProtectedRoute roles={["admin", "manager"]}>
-//                 <Dashboard />
-//             </ProtectedRoute>
-//         ),
-//     },
-
-//     {
-//         path: "*",
-//         element: <Navigate to="/login" replace />,
-//     },
-// ];
-
-// export default routes;

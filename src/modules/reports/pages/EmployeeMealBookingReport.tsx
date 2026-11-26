@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import { ColumnFilterRow, useColumnFilters, downloadCsv, localToday, type FilterColumn } from "../components/TableTools";
 import {
     // CalendarDays,
     CheckCircle2,
@@ -24,6 +26,8 @@ interface MealType {
 interface EmployeeBooking {
     id: number;
     employee_id: number;
+    employee_name?: string;
+    employee_code?: string;
     meal_date: string;
     meal_type_id: number;
     meal_type_name: string;
@@ -36,24 +40,38 @@ interface EmployeeBooking {
 }
 
 
-export default function EmployeeMealBookingReport() {
+const reportColumns: FilterColumn<EmployeeBooking>[] = [
+    { key: "meal_date", label: "Date", value: (row) => row.meal_date },
+    { key: "employee", label: "Employee", value: (row) => `${row.employee_name || row.employee_id} ${row.employee_code ?? ""}`.trim() },
+    { key: "meal_type_name", label: "Meal type", value: (row) => row.meal_type_name },
+    { key: "menu_id", label: "Menu ID", value: (row) => row.menu_id },
+    { key: "meal_rate", label: "Rate", value: (row) => row.meal_rate },
+    { key: "quantity", label: "Quantity", value: (row) => row.quantity },
+    { key: "total_amount", label: "Amount", value: (row) => row.total_amount },
+    { key: "status", label: "Status", value: (row) => row.status },
+];
+
+export default function EmployeeMealBookingReport({ reportKind = "bookings" }: { reportKind?: "bookings" | "cost" }) {
+    const initialQuery = new URLSearchParams(window.location.search);
 
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [mealTypes, setMealTypes] = useState<MealType[]>([]);
 
-    const today = new Date()
-        .toISOString()
-        .split("T")[0];
+    const today = localToday();
 
-    const [dateFrom, setDateFrom] = useState(today);
-    const [dateTo, setDateTo] = useState(today);
+    const [dateFrom, setDateFrom] = useState(initialQuery.get("date_from") || today);
+    const [dateTo, setDateTo] = useState(initialQuery.get("date_to") || today);
 
     const [employeeId, setEmployeeId] = useState("");
-    const [mealTypeId, setMealTypeId] = useState("");
-    const [status, setStatus] = useState("");
+    const [mealTypeId, setMealTypeId] = useState(initialQuery.get("meal_type_id") || "");
+    const [status, setStatus] = useState(initialQuery.get("status") || "");
+    const [menuItemId, setMenuItemId] = useState(initialQuery.get("menu_item_id") || "");
 
     const [data, setData] = useState<EmployeeBooking[]>([]);
+    const tableFilter = useColumnFilters(data, reportColumns);
+    const [reportError, setReportError] = useState("");
+
 
     const [loading, setLoading] = useState(false);
 
@@ -115,12 +133,14 @@ export default function EmployeeMealBookingReport() {
     const loadReport = async () => {
 
         setLoading(true);
+        setReportError("");
 
         try {
 
             const params: Record<string, any> = {
                 date_from: dateFrom,
                 date_to: dateTo,
+                ...(menuItemId ? { menu_item_id: menuItemId } : {}),
             };
 
             if (employeeId) {
@@ -140,7 +160,7 @@ export default function EmployeeMealBookingReport() {
 
             const response =
                 await api.get(
-                    "/meal-reports/employee-bookings",
+                    reportKind === "cost" ? "/meal-reports/cost" : "/meal-reports/employee-bookings",
                     {
                         params,
                     }
@@ -191,6 +211,8 @@ export default function EmployeeMealBookingReport() {
             });
 
         } catch (error) {
+            setReportError((error as any)?.response?.data?.message || "Unable to load the report. Please try again.");
+            setData([]);
 
             console.error(
                 "Failed to load employee booking report:",
@@ -218,6 +240,7 @@ export default function EmployeeMealBookingReport() {
         setDateFrom(today);
         setDateTo(today);
         setEmployeeId("");
+        setMenuItemId("");
         setMealTypeId("");
         setStatus("");
 
@@ -283,7 +306,7 @@ export default function EmployeeMealBookingReport() {
                     <div className="mb-6">
 
                         <h2 className="text-2xl lg:text-3xl font-bold text-gray-800">
-                            Employee Meal Booking Report
+                            {reportKind === "cost" ? "Meal Cost Report" : "Employee Meal Booking Report"}
                         </h2>
 
                         <p className="text-gray-500 mt-1">
@@ -316,7 +339,7 @@ export default function EmployeeMealBookingReport() {
                             <div>
 
                                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                                    Employee ID
+                                    Employee
                                 </label>
 
                                 <input
@@ -529,6 +552,8 @@ export default function EmployeeMealBookingReport() {
 
                         <div className="overflow-x-auto">
 
+                            {reportError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{reportError}</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500"><span>{tableFilter.rows.length} matching rows · Summary totals use the date and status filters.</span><div className="flex gap-3"><button type="button" onClick={tableFilter.reset} className="text-indigo-600">Clear column filters</button><button type="button" disabled={loading || !tableFilter.rows.length} onClick={() => downloadCsv("EmployeeMealBookingReport.csv", tableFilter.rows, reportColumns)} className="rounded-lg bg-indigo-600 px-3 py-2 font-semibold text-white disabled:opacity-50">Export CSV</button></div></div>
                             <table className="w-full text-sm">
 
                                 <thead className="bg-gray-50 border-b border-gray-100">
@@ -540,7 +565,7 @@ export default function EmployeeMealBookingReport() {
                                         </Th>
 
                                         <Th>
-                                            Employee ID
+                                            Employee
                                         </Th>
 
                                         <Th>
@@ -567,13 +592,15 @@ export default function EmployeeMealBookingReport() {
                                             Status
                                         </Th>
 
-                                    </tr>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">History</th>
+</tr>
 
-                                </thead>
+                                <ColumnFilterRow columns={[...reportColumns, null]} filters={tableFilter.filters} onChange={tableFilter.setFilter} />
+</thead>
 
                                 <tbody>
 
-                                    {data.map(
+                                    {tableFilter.rows.map(
                                         (row) => (
 
                                             <tr
@@ -587,7 +614,7 @@ export default function EmployeeMealBookingReport() {
 
                                                 <Td>
                                                     <span className="font-semibold text-gray-700">
-                                                        {row.employee_id}
+                                                        {row.employee_name || row.employee_id}<small className="block text-xs text-slate-400">{row.employee_code}</small>
                                                     </span>
                                                 </Td>
 
@@ -621,7 +648,8 @@ export default function EmployeeMealBookingReport() {
                                                     )}
                                                 </Td>
 
-                                            </tr>
+                                            <Td><DataLogButton resource="employee_meals" recordId={row.id} /></Td>
+</tr>
 
                                         )
                                     )}
@@ -632,7 +660,7 @@ export default function EmployeeMealBookingReport() {
 
 
                             {!loading &&
-                                data.length === 0 && (
+                                tableFilter.rows.length === 0 && (
 
                                     <div className="py-14 text-center">
 

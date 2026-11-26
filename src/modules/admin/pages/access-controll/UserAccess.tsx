@@ -1,3 +1,5 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
 import {
   ShieldCheck,
   Save,
@@ -126,6 +128,7 @@ const normalizeList = <T,>(value: unknown): T[] => {
 };
 
 export default function UserAccessPage() {
+  const canUpdate = canAccess("admin", "access-control", "user-access", "update");
   const [openSidebar, setOpenSidebar] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
@@ -155,7 +158,7 @@ export default function UserAccessPage() {
   const loadUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
-      const res = await api.get("/admin/users");
+      const res = await api.get("/lookups/users");
       const list = res.data.data?.users ?? res.data.data ?? res.data;
       setUsers(normalizeList<User>(list));
     } catch (error) {
@@ -586,12 +589,16 @@ export default function UserAccessPage() {
   const filteredModules = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return modules;
+    const matchesExtra = (permissions: ExtraPermission[]) => permissions.some(
+      (permission) => `${permission.name} ${permission.key} ${permission.description ?? ""}`.toLowerCase().includes(keyword)
+    );
 
     return modules
       .map((module) => {
         const moduleMatches =
           module.name.toLowerCase().includes(keyword) ||
-          module.code.toLowerCase().includes(keyword);
+          module.code.toLowerCase().includes(keyword) ||
+          matchesExtra(module.extra_permissions);
 
         if (moduleMatches) return module;
 
@@ -599,14 +606,16 @@ export default function UserAccessPage() {
           .map((menu) => {
             const menuMatches =
               menu.name.toLowerCase().includes(keyword) ||
-              menu.code.toLowerCase().includes(keyword);
+              menu.code.toLowerCase().includes(keyword) ||
+              matchesExtra(menu.extra_permissions);
 
             if (menuMatches) return menu;
 
             const child_menus = menu.child_menus.filter(
               (child) =>
                 child.name.toLowerCase().includes(keyword) ||
-                child.code.toLowerCase().includes(keyword)
+                child.code.toLowerCase().includes(keyword) ||
+                matchesExtra(child.extra_permissions)
             );
 
             return child_menus.length ? { ...menu, child_menus } : null;
@@ -663,7 +672,7 @@ export default function UserAccessPage() {
             </span>
           </div>
 
-          <button
+          {canUpdate && (<button
             type="button"
             onClick={() =>
               setExtraPermissions(
@@ -676,7 +685,7 @@ export default function UserAccessPage() {
             className="text-xs font-semibold text-violet-700 transition hover:text-violet-900"
           >
             {allEnabled ? "Remove all" : "Grant all"}
-          </button>
+          </button>)}
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -690,7 +699,7 @@ export default function UserAccessPage() {
                   : "border-violet-100 bg-white/60 hover:border-violet-200"
               }`}
             >
-              <input
+              <input disabled={!canUpdate || saving}
                 type="checkbox"
                 checked={permission.allowed}
                 onChange={(event) =>
@@ -748,7 +757,7 @@ export default function UserAccessPage() {
                   : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
               } ${compact ? "min-w-[66px] justify-center" : ""}`}
             >
-              <input
+              <input disabled={!canUpdate || saving}
                 type="checkbox"
                 checked={checked}
                 onChange={(event) =>
@@ -761,7 +770,7 @@ export default function UserAccessPage() {
           );
         })}
 
-        <button
+        {canUpdate && (<button
           type="button"
           onClick={onToggleAll}
           className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
@@ -771,7 +780,7 @@ export default function UserAccessPage() {
           }`}
         >
           {full ? "Clear all" : empty ? "Grant all" : "Grant all"}
-        </button>
+        </button>)}
       </div>
     );
   };
@@ -806,7 +815,7 @@ export default function UserAccessPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              {canUpdate && (<button
                 type="button"
                 onClick={undoChanges}
                 disabled={!selectedUser || !isDirty || saving || loadingAccess}
@@ -814,7 +823,7 @@ export default function UserAccessPage() {
               >
                 <RotateCcw size={16} />
                 Undo changes
-              </button>
+              </button>)}
               <button
                 type="button"
                 onClick={() => selectedUser && loadUserAccess(selectedUser)}
@@ -827,7 +836,7 @@ export default function UserAccessPage() {
                 />
                 Reload
               </button>
-              <button
+              {canUpdate && (<button
                 type="button"
                 onClick={saveAccess}
                 disabled={!selectedUser || !isDirty || saving || loadingAccess}
@@ -839,7 +848,7 @@ export default function UserAccessPage() {
                   <Save size={16} />
                 )}
                 {saving ? "Saving..." : "Save changes"}
-              </button>
+              </button>)}
             </div>
           </div>
 
@@ -902,6 +911,7 @@ export default function UserAccessPage() {
                       </option>
                     ))}
                   </select>
+{selectedUser && <div className="mt-2"><DataLogButton resource="users" recordId={selectedUser} label="Access history" /></div>}
                 </div>
                 {selectedUserInfo && (
                   <div className="mt-3 flex items-center gap-2">
@@ -1019,7 +1029,7 @@ export default function UserAccessPage() {
                         type="text"
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search module or menu..."
+                        placeholder="Search module, menu or permission..."
                         className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white"
                       />
                     </div>
@@ -1149,7 +1159,7 @@ export default function UserAccessPage() {
                                 }}
                               />
                             </div>
-                            <button
+                            {canUpdate && (<button
                               type="button"
                               onClick={() =>
                                 setModuleAll(module.id, !moduleFull)
@@ -1166,7 +1176,7 @@ export default function UserAccessPage() {
                                 <CheckCheck size={14} />
                               )}
                               {moduleFull ? "Remove module access" : "Grant full module access"}
-                            </button>
+                            </button>)}
                           </div>
                         </div>
 
@@ -1244,7 +1254,7 @@ export default function UserAccessPage() {
 
                                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                                           {hasChildren ? (
-                                            <button
+                                            canUpdate && (<button
                                               type="button"
                                               onClick={() =>
                                                 setMenuAll(module.id, menu.id, !menuFull)
@@ -1256,7 +1266,7 @@ export default function UserAccessPage() {
                                               }`}
                                             >
                                               {menuFull ? "Remove menu access" : "Grant menu access"}
-                                            </button>
+                                            </button>)
                                           ) : menu.permission ? (
                                             renderCrudControls(
                                               menuPermission,

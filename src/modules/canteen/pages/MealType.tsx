@@ -1,3 +1,6 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
+import { ColumnFilterPanel, useColumnFilters, type FilterColumn } from "../../reports/components/TableTools";
 import {
   Plus,
   Edit,
@@ -34,10 +37,19 @@ const initialForm = {
   status: "Active" as "Active" | "Inactive",
 };
 
+const columns: FilterColumn<MealType>[] = [
+  { key: "name", label: "Name", value: (row) => row.name },
+  { key: "description", label: "Description", value: (row) => row.description },
+  { key: "cutoff", label: "Cutoff", value: (row) => row.booking_cutoff_time },
+  { key: "rate", label: "Rate", value: (row) => row.meal_rate },
+  { key: "status", label: "Status", value: (row) => row.status },
+];
+
 export default function MealTypePage() {
   const [openSidebar, setOpenSidebar] = useState(false);
 
   const [mealTypes, setMealTypes] = useState<MealType[]>([]);
+  const tableFilter = useColumnFilters(mealTypes, columns);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -50,9 +62,15 @@ export default function MealTypePage() {
     try {
       setLoading(true);
 
-      const response = await api.get("/meal-types");
-
-      setMealTypes(response.data?.data?.data || []);
+      const all: MealType[] = [];
+      let page = 1, lastPage = 1;
+      do {
+        const response = await api.get("/meal-types", { params: { page, per_page: 100 } });
+        const result = response.data?.data;
+        all.push(...(Array.isArray(result?.data) ? result.data : []));
+        lastPage = Number(result?.last_page || 1); page += 1;
+      } while (page <= lastPage);
+      setMealTypes(all);
     } catch (error: any) {
       console.error(
         "Failed to load meal types:",
@@ -69,11 +87,7 @@ export default function MealTypePage() {
     loadMealTypes();
   }, []);
 
-  // const openCreateModal = () => {
-  //   setEditId(null);
-  //   setForm({ ...initialForm });
-  //   setModalOpen(true);
-  // };
+  const openCreateModal = () => { setEditId(null); setForm({ ...initialForm }); setModalOpen(true); };
 
   const openEditModal = (item: MealType) => {
     setEditId(item.id);
@@ -219,14 +233,14 @@ export default function MealTypePage() {
               </p>
             </div>
 
-            {/* <button
+            {canAccess("canteen", "meal-type", null, "create") && (<button
               type="button"
               onClick={openCreateModal}
               className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 transition font-semibold"
             >
               <Plus size={18} />
               Add Meal Type
-            </button> */}
+            </button>)} 
           </div>
 
           {/* List */}
@@ -257,6 +271,7 @@ export default function MealTypePage() {
               </button>
             </div>
 
+            <ColumnFilterPanel columns={columns} filters={tableFilter.filters} onChange={tableFilter.setFilter} />
             {/* Loading */}
             {loading ? (
               <div className="py-12 text-center text-gray-500">
@@ -267,7 +282,7 @@ export default function MealTypePage() {
 
                 Loading meal types...
               </div>
-            ) : mealTypes.length === 0 ? (
+            ) : tableFilter.rows.length === 0 ? (
               /* Empty */
               <div className="py-12 text-center">
                 <div className="bg-gray-100 p-4 rounded-2xl w-fit mx-auto">
@@ -285,7 +300,7 @@ export default function MealTypePage() {
             ) : (
               /* List */
               <div className="space-y-3">
-                {mealTypes.map((item, index) => (
+                {tableFilter.rows.map((item, index) => (
                   <div
                     key={item.id}
                     className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-4 hover:bg-gray-100 transition"
@@ -331,6 +346,7 @@ export default function MealTypePage() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                      <DataLogButton resource="meal_types" recordId={item.id} />
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-semibold ${
                           item.status === "Active"
@@ -341,7 +357,7 @@ export default function MealTypePage() {
                         {item.status}
                       </span>
 
-                      <button
+                      {canAccess("canteen", "meal-type", null, "update") && (<button
                         type="button"
                         onClick={() =>
                           openEditModal(item)
@@ -350,9 +366,9 @@ export default function MealTypePage() {
                         title="Edit"
                       >
                         <Edit size={18} />
-                      </button>
+                      </button>)} 
 
-                      <button
+                      {canAccess("canteen", "meal-type", null, "delete") && (<button
                         type="button"
                         onClick={() =>
                           deleteMealType(item.id)
@@ -361,7 +377,7 @@ export default function MealTypePage() {
                         title="Delete"
                       >
                         <Trash2 size={18} />
-                      </button>
+                      </button>)} 
                     </div>
                   </div>
                 ))}

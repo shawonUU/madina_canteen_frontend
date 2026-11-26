@@ -1,3 +1,4 @@
+import DataLogButton from "../../../components/DataLogButton";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -530,6 +531,7 @@ export default function MeetingInvitations() {
                     </span>
                 ),
             },
+            { id: "history", header: "History", enableSorting: false, enableColumnFilter: false, size: 90, Cell: ({ row }) => <DataLogButton resource="meeting_participants" recordId={row.original.id} /> },
             {
                 id: "actions",
                 header: "Actions",

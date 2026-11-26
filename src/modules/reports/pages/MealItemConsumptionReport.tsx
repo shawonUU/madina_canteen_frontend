@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { ColumnFilterRow, useColumnFilters, downloadCsv, localToday, type FilterColumn } from "../components/TableTools";
 import {
     Filter,
     RefreshCw,
@@ -10,6 +12,7 @@ import { useEffect, useState } from "react";
 import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
+import { canAccess } from "../../../services/permissions";
 
 
 interface MealType {
@@ -29,7 +32,16 @@ interface ItemConsumption {
 }
 
 
+const reportColumns: FilterColumn<ItemConsumption>[] = [
+    { key: "item_name", label: "Item name", value: (row) => row.item_name },
+    { key: "item_type", label: "Item type", value: (row) => row.item_type },
+    { key: "meal_type_name", label: "Meal type", value: (row) => row.meal_type_name },
+    { key: "selected_count", label: "Quantity", value: (row) => row.selected_count },
+];
+
 export default function MealItemConsumptionReport() {
+    const bookingReportPath = canAccess("reports", "meal-reports", "employee-bookings") ? "/reports/employee-bookings"
+        : canAccess("reports", "meal-reports", "cost") ? "/reports/cost" : null;
 
     const [openSidebar, setOpenSidebar] =
         useState(false);
@@ -37,9 +49,7 @@ export default function MealItemConsumptionReport() {
     const [mealTypes, setMealTypes] =
         useState<MealType[]>([]);
 
-    const today = new Date()
-        .toISOString()
-        .split("T")[0];
+    const today = localToday();
 
     const [dateFrom, setDateFrom] =
         useState(today);
@@ -55,6 +65,9 @@ export default function MealItemConsumptionReport() {
 
     const [data, setData] =
         useState<ItemConsumption[]>([]);
+    const tableFilter = useColumnFilters(data, reportColumns);
+    const [reportError, setReportError] = useState("");
+
 
     const [loading, setLoading] =
         useState(false);
@@ -113,6 +126,7 @@ export default function MealItemConsumptionReport() {
     const loadReport = async () => {
 
         setLoading(true);
+        setReportError("");
 
         try {
 
@@ -150,6 +164,8 @@ export default function MealItemConsumptionReport() {
             );
 
         } catch (error) {
+            setReportError((error as any)?.response?.data?.message || "Unable to load the report. Please try again.");
+            setData([]);
 
             console.error(
                 "Failed to load item consumption report:",
@@ -497,6 +513,8 @@ export default function MealItemConsumptionReport() {
 
                         <div className="overflow-x-auto">
 
+                            {reportError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{reportError}</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500"><span>{tableFilter.rows.length} matching rows · Summary totals use the date and status filters.</span><div className="flex gap-3"><button type="button" onClick={tableFilter.reset} className="text-indigo-600">Clear column filters</button><button type="button" disabled={loading || !tableFilter.rows.length} onClick={() => downloadCsv("MealItemConsumptionReport.csv", tableFilter.rows, reportColumns)} className="rounded-lg bg-indigo-600 px-3 py-2 font-semibold text-white disabled:opacity-50">Export CSV</button></div></div>
                             <table className="w-full text-sm">
 
                                 <thead className="bg-gray-50 border-b border-gray-100">
@@ -523,14 +541,16 @@ export default function MealItemConsumptionReport() {
                                             Selected Count
                                         </th>
 
-                                    </tr>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">History</th>
+</tr>
 
-                                </thead>
+                                <ColumnFilterRow columns={[null, ...reportColumns, null]} filters={tableFilter.filters} onChange={tableFilter.setFilter} />
+</thead>
 
 
                                 <tbody>
 
-                                    {data.map(
+                                    {tableFilter.rows.map(
                                         (item, index) => (
 
                                             <tr
@@ -603,7 +623,8 @@ export default function MealItemConsumptionReport() {
 
                                                 </td>
 
-                                            </tr>
+                                            <td className="px-4 py-3">{bookingReportPath ? <Link className="text-indigo-600 underline whitespace-nowrap" to={`${bookingReportPath}?date_from=${dateFrom}&date_to=${dateTo}&menu_item_id=${item.menu_item_id}&status=${status}`}>View bookings &amp; logs</Link> : <span className="text-xs text-slate-400">Booking report access required</span>}</td>
+</tr>
 
                                         )
                                     )}
@@ -614,7 +635,7 @@ export default function MealItemConsumptionReport() {
 
 
                             {!loading &&
-                                data.length === 0 && (
+                                tableFilter.rows.length === 0 && (
 
                                     <div className="py-14 text-center">
 

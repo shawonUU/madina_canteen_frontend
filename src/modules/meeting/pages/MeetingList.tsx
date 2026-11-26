@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import { canAccess } from "../../../services/permissions";
 
 import {
     Plus,
@@ -62,6 +64,7 @@ interface Meeting {
     organizer_id?: number;
     participants_count?: number;
     created_at?: string;
+    can_manage?: boolean;
 }
 
 interface ApiMeta {
@@ -173,12 +176,7 @@ function normalizeList<T>(responseData: any): {
     if (Array.isArray(payload)) {
         return {
             records: payload,
-            meta: responseData?.meta ?? {
-                current_page: 1,
-                last_page: 1,
-                per_page: payload.length,
-                total: payload.length,
-            },
+            meta: responseData?.meta ?? { current_page: responseData.current_page ?? 1, last_page: responseData.last_page ?? 1, per_page: responseData.per_page ?? payload.length, total: responseData.total ?? payload.length },
         };
     }
 
@@ -207,6 +205,9 @@ function normalizeList<T>(responseData: any): {
 
 export default function MeetingList() {
     const navigate = useNavigate();
+    const canCreate = ["meeting-list", "create-meeting", "meeting-calendar"].some(child => canAccess("meeting", "meeting-scheduling", child, "create"));
+    const canUpdate = ["meeting-list", "create-meeting", "meeting-calendar"].some(child => canAccess("meeting", "meeting-scheduling", child, "update"));
+    const canDelete = ["meeting-list", "create-meeting", "meeting-calendar"].some(child => canAccess("meeting", "meeting-scheduling", child, "delete"));
 
     const [openSidebar, setOpenSidebar] = useState(false);
     const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -259,7 +260,7 @@ export default function MeetingList() {
                     )
                     .map((filter) => [
                         String(filter.id),
-                        String(filter.value).trim(),
+                        filter.value instanceof Date ? `${filter.value.getFullYear()}-${String(filter.value.getMonth() + 1).padStart(2, "0")}-${String(filter.value.getDate()).padStart(2, "0")}` : String(filter.value).trim(),
                     ]),
             ),
         [columnFilters],
@@ -343,6 +344,7 @@ export default function MeetingList() {
         globalSearch.trim() !== "" || columnFilters.length > 0;
 
     const handleDelete = async (meeting: Meeting) => {
+        if (!canDelete || !meeting.can_manage) return;
         if (
             !window.confirm(
                 `Are you sure you want to delete meeting "${meeting.meeting_number}"?`,
@@ -496,7 +498,8 @@ export default function MeetingList() {
                 id: "participants_count",
                 header: "Participants",
                 minSize: 130,
-                enableColumnFilter: false,
+                enableColumnFilter: true,
+                mantineFilterTextInputProps: { type: "number", min: 0 },
                 Cell: ({ row }) => (
                     <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
                         <Users size={14} />
@@ -532,9 +535,9 @@ export default function MeetingList() {
                 filterVariant: "select",
                 mantineFilterSelectProps: {
                     data: [
-                        { label: "Pending", value: "pending" },
-                        { label: "Approved", value: "approved" },
-                        { label: "Rejected", value: "rejected" },
+                        { label: "Pending", value: "Pending" },
+                        { label: "Approved", value: "Approved" },
+                        { label: "Rejected", value: "Rejected" },
                     ],
                     clearable: true,
                     placeholder: "All approvals",
@@ -554,6 +557,7 @@ export default function MeetingList() {
                 enableColumnFilter: false,
                 Cell: ({ row }) => (
                     <div className="flex items-center gap-1">
+                        <DataLogButton resource="meetings" recordId={row.original.id} />
                         <button
                             type="button"
                             onClick={() =>
@@ -570,18 +574,17 @@ export default function MeetingList() {
 
 
 
-                        <button
+                        {canUpdate && <button
                             type="button"
                             onClick={() =>
-                                alert(
-                                    "Edit meeting page will be implemented next.",
-                                )
+                                navigate(`/meeting-management/meetings/${row.original.id}/edit`)
                             }
+                            disabled={!row.original.can_manage}
                             title="Edit meeting"
                             className="flex h-8 w-8 items-center justify-center rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                         >
                             <Pencil size={15} />
-                        </button>
+                        </button>}
 
                         <button
                             type="button"
@@ -596,10 +599,10 @@ export default function MeetingList() {
                             <User size={15} />
                         </button>
 
-                        <button
+                        {canDelete && <button
                             type="button"
                             onClick={() => void handleDelete(row.original)}
-                            disabled={deletingId === row.original.id}
+                            disabled={!row.original.can_manage || deletingId === row.original.id}
                             title="Delete meeting"
                             className="flex h-8 w-8 items-center justify-center rounded border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
                         >
@@ -611,7 +614,7 @@ export default function MeetingList() {
                             ) : (
                                 <Trash2 size={15} />
                             )}
-                        </button>
+                        </button>}
                     </div>
                 ),
             },
@@ -621,6 +624,8 @@ export default function MeetingList() {
             pagination.pageSize,
             deletingId,
             navigate,
+            canUpdate,
+            canDelete,
         ],
     );
 
@@ -796,7 +801,7 @@ export default function MeetingList() {
                                 Refresh
                             </button>
 
-                            <button
+                            {canCreate && <button
                                 type="button"
                                 onClick={() =>
                                     navigate(
@@ -807,7 +812,7 @@ export default function MeetingList() {
                             >
                                 <Plus size={17} />
                                 Create Meeting
-                            </button>
+                            </button>}
                         </div>
                     </div>
 

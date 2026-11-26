@@ -1,3 +1,5 @@
+import { canAccess, hasPermission } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -233,6 +235,11 @@ export default function ViewTicket() {
 
     const [assignee, setAssignee] = useState("");
     const [users, setUsers] = useState<UserOption[]>([]);
+    const canAssign = hasPermission("support.ticket.assign");
+    const canManage = hasPermission("support.ticket.manage");
+    const canInternal = hasPermission("support.ticket.internal");
+    const canReply = ["my-tickets", "create-ticket", "my-assigned-tickets", "all-tickets"]
+        .some(menu => canAccess("support", menu, null, "update"));
     const [assigning, setAssigning] = useState(false);
 
     const [actionError, setActionError] = useState("");
@@ -271,8 +278,9 @@ export default function ViewTicket() {
 
     useEffect(() => {
         let active = true;
+        if (!canAssign) return;
 
-        api.get("/admin/users", {
+        api.get("/support/assignees", {
             params: { per_page: 100 },
         })
             .then(({ data }) => {
@@ -308,7 +316,7 @@ export default function ViewTicket() {
         return () => {
             active = false;
         };
-    }, []);
+    }, [canAssign]);
 
     const sendReply = async (
         event: FormEvent<HTMLFormElement>
@@ -559,6 +567,7 @@ export default function ViewTicket() {
                                                             {item.message}
                                                         </p>
 
+                                                        <DataLogButton resource="support_ticket_replies" recordId={item.id} />
                                                         {/* Reply Images */}
                                                         <AttachmentGallery
                                                             attachments={replyItem.attachments}
@@ -575,7 +584,7 @@ export default function ViewTicket() {
                                     )}
                                 </div>
 
-                                {!["resolved", "closed"].includes(
+                                {canReply && !["resolved", "closed"].includes(
                                     ticket.status
                                 ) && (
                                     <form
@@ -599,7 +608,7 @@ export default function ViewTicket() {
                                         />
 
                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                                            {ticket.assigned_to && (
+                                            {canInternal && (
                                                 <label className="flex items-center gap-2 text-sm text-slate-600">
                                                     <input
                                                         type="checkbox"
@@ -749,7 +758,7 @@ export default function ViewTicket() {
                             </section>
 
                             {/* Update Status */}
-                            <section className="rounded-xl border border-slate-300 bg-white p-5">
+                            {canManage && <section className="rounded-xl border border-slate-300 bg-white p-5">
                                 <h2 className="font-bold text-slate-900">
                                     Update Status
                                 </h2>
@@ -820,10 +829,10 @@ export default function ViewTicket() {
                                             : "Update Status"}
                                     </button>
                                 </form>
-                            </section>
+                            </section>}
 
                             {/* Assign Ticket */}
-                            <section className="rounded-xl border border-slate-300 bg-white p-5">
+                            {canAssign && <section className="rounded-xl border border-slate-300 bg-white p-5">
                                 <h2 className="font-bold text-slate-900">
                                     Assign Ticket
                                 </h2>
@@ -866,7 +875,7 @@ export default function ViewTicket() {
                                         </select>
 
                                         <p className="mt-1 text-xs text-slate-400">
-                                            User list is loaded from the existing /admin/users endpoint.
+                                            Only active users are available for assignment.
                                         </p>
                                     </div>
 
@@ -895,7 +904,8 @@ export default function ViewTicket() {
                                             : "Assign Ticket"}
                                     </button>
                                 </form>
-                            </section>
+                            </section>}
+                            <DataLogButton resource="support_tickets" recordId={ticket.id} />
                         </aside>
                     </div>
                 </>

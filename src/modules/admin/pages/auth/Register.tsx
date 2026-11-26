@@ -39,8 +39,12 @@ export default function Register() {
 
         e.preventDefault();
 
-        setLoading(true);
         setError("");
+        if (form.password !== form.password_confirmation) {
+            setError("Password and confirmation do not match.");
+            return;
+        }
+        setLoading(true);
 
 
         try {
@@ -274,7 +278,7 @@ export default function Register() {
 
                             type="text"
 
-                            name="name"
+                            name="name" required maxLength={255}
 
                             value={form.name}
 
@@ -319,7 +323,7 @@ export default function Register() {
 
                             <input
 
-                            type="email"
+                            type="email" required autoComplete="email"
 
                             name="email"
 
@@ -366,7 +370,7 @@ export default function Register() {
 
                             <input
 
-                            type="password"
+                            type="password" required minLength={8} autoComplete="new-password"
 
                             name="password"
 
@@ -413,7 +417,7 @@ export default function Register() {
 
                             <input
 
-                            type="password"
+                            type="password" required minLength={8} autoComplete="new-password"
 
                             name="password_confirmation"
 

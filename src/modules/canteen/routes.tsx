@@ -1,10 +1,13 @@
+import { lazy } from "react";
+const MealRate = lazy(() => import("./pages/MealRate"));
 import ProtectedRoute from "../../app/router/ProtectedRoute";
-import MealType from "../canteen/pages/MealType";
-import Menu from "../canteen/pages/Menu";
-import Booking from "../canteen/pages/Booking";
-import MealServing from "../canteen/pages/MealServing";
+const MealType = lazy(() => import("../canteen/pages/MealType"));
+const Menu = lazy(() => import("../canteen/pages/Menu"));
+const Booking = lazy(() => import("../canteen/pages/Booking"));
+const MealServing = lazy(() => import("../canteen/pages/MealServing"));
 
 const dashboardRoutes = [
+    { path: "/canteen/meal-rate", element: <ProtectedRoute roles={["admin"]}><MealRate /></ProtectedRoute> },
     {
         path: "/canteen/meal-type",
         element: (

@@ -1,6 +1,6 @@
 
 import api from "../../../services/api";
-import {setToken, setUser, removeToken, setUserAccess} from "../../../services/storage";
+import {setToken, setUser, clearAuth, setUserAccess, setUserPermissions} from "../../../services/storage";
 
 import type {
     LoginPayload,
@@ -12,7 +12,8 @@ export const login = async(data:LoginPayload)=>{
     const response = await api.post<AuthResponse>("/auth/login", data);
     setToken(response.data.token);
     setUser(response.data.user);
-    setUserAccess(response.data.accesses);
+    setUserAccess(response.data.accesses ?? []);
+    setUserPermissions(response.data.permissions ?? []);
     return response.data;
 };
 
@@ -21,8 +22,11 @@ export const register = async(data:RegisterPayload)=>{
     return response.data;
 };
 
-export const logout = async()=>{
-    const response = await api.post("/auth/logout");
-    removeToken();
-    return response.data;
-}
+export const logout = async () => {
+    try {
+        const response = await api.post("/auth/logout");
+        return response.data;
+    } finally {
+        clearAuth();
+    }
+};

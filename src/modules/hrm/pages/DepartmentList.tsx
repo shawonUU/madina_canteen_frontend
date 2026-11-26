@@ -1,3 +1,5 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
 import {
     Plus,
     Pencil,
@@ -39,7 +41,7 @@ interface Department {
     name: string;
     description: string | null;
     status: "Active" | "Inactive";
-    designations_count?: number;
+    employees_count?: number;
     created_at?: string;
 }
 
@@ -130,6 +132,9 @@ function normalizeList<T>(responseData: any): {
 }
 
 export default function DepartmentPage() {
+  const canCreate = canAccess("hrm", "configuration", "department-list", "create");
+  const canDelete = canAccess("hrm", "configuration", "department-list", "delete");
+  const canUpdate = canAccess("hrm", "configuration", "department-list", "update");
     const [openSidebar, setOpenSidebar] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(true);
@@ -452,15 +457,15 @@ export default function DepartmentPage() {
                 ),
             },
             {
-                accessorKey: "designations_count",
-                id: "designations_count",
-                header: "Designations",
+                accessorKey: "employees_count",
+                id: "employees_count",
+                header: "Employees",
                 minSize: 130,
-                enableColumnFilter: false,
+                mantineFilterTextInputProps: { type: "number", min: 0 },
                 Cell: ({ row }) => (
                     <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
                         <UsersRound size={14} />
-                        {row.original.designations_count ?? 0}
+                        {row.original.employees_count ?? 0}
                     </span>
                 ),
             },
@@ -485,21 +490,22 @@ export default function DepartmentPage() {
             {
                 id: "actions",
                 header: "Actions",
-                size: 110,
-                minSize: 110,
+                size: 175,
+                minSize: 175,
                 enableSorting: false,
                 enableColumnFilter: false,
                 Cell: ({ row }) => (
                     <div className="flex items-center gap-1">
-                        <button
+<DataLogButton resource="departments" recordId={row.original.id} />
+                        {canUpdate && (<button
                             type="button"
                             onClick={() => openEditModal(row.original)}
                             title="Edit department"
                             className="flex h-8 w-8 items-center justify-center rounded border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                         >
                             <Pencil size={15} />
-                        </button>
-                        <button
+                        </button>)}
+                        {canDelete && (<button
                             type="button"
                             onClick={() => void handleDelete(row.original)}
                             disabled={deletingId === row.original.id}
@@ -511,12 +517,12 @@ export default function DepartmentPage() {
                             ) : (
                                 <Trash2 size={15} />
                             )}
-                        </button>
+                        </button>)}
                     </div>
                 ),
             },
         ],
-        [pagination.pageIndex, pagination.pageSize, deletingId],
+        [pagination.pageIndex, pagination.pageSize, deletingId, canUpdate, canDelete],
     );
 
     const table = useMantineReactTable({
@@ -528,6 +534,7 @@ export default function DepartmentPage() {
         rowCount: totalRecords,
         pageCount: lastPage,
         enableColumnFilters: true,
+        initialState: { showColumnFilters: true },
         enableGlobalFilter: false,
         enableColumnFilterModes: false,
         enableColumnActions: false,
@@ -559,7 +566,7 @@ export default function DepartmentPage() {
                 "code",
                 "name",
                 "description",
-                "designations_count",
+                "employees_count",
                 "status",
                 "actions",
             ],
@@ -654,14 +661,14 @@ export default function DepartmentPage() {
                                 />
                                 Refresh
                             </button>
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-700 bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
                             >
                                 <Plus size={17} />
                                 Add Department
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 

@@ -1,3 +1,6 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../components/ColumnFilters";
 import {
     Plus,
     Pencil,
@@ -39,6 +42,10 @@ const initialForm: ModuleForm = {
 };
 
 export default function Module() {
+  const canDelete = canAccess("admin", "system-management", "module", "delete");
+  const canUpdate = canAccess("admin", "system-management", "module", "update");
+  const canCreate = canAccess("admin", "system-management", "module", "create");
+  const [columnFilters, setColumnFilters] = useState<Filters>({});
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [modules, setModules] = useState<ModuleData[]>([]);
@@ -248,14 +255,14 @@ export default function Module() {
                                 />
                             </button>
 
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
                                 <Plus size={18} />
                                 Add Module
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 
@@ -326,10 +333,11 @@ export default function Module() {
                                                 Action
                                             </th>
                                         </tr>
-                                    </thead>
+                                    <ColumnFilters columns={[null, { key: "name", label: "Name" }, { key: "slug", label: "Slug" }, { key: "icon", label: "Icon" }, { key: "sort_order", label: "Sort order" }, { key: "status", label: "Status", options: ["Active", "Inactive"] }, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                                     <tbody className="divide-y divide-gray-100">
-                                        {modules.map(
+                                        {modules.filter((item) => matchesColumns({name: item.name, slug: item.slug, icon: item.icon, sort_order: item.sort_order, status: item.is_active ? "Active" : "Inactive"}, columnFilters)).map(
                                             (module, index) => (
                                                 <tr
                                                     key={
@@ -388,7 +396,8 @@ export default function Module() {
 
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            <button
+<DataLogButton resource="modules" recordId={module.id} />
+                                                            {canUpdate && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openEditModal(
@@ -402,9 +411,9 @@ export default function Module() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
 
-                                                            <button
+                                                            {canDelete && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleDelete(
@@ -418,7 +427,7 @@ export default function Module() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
                                                         </div>
                                                     </td>
                                                 </tr>

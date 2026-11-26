@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import RecordColumnFilters, { matchesRecordFilters } from "../components/RecordColumnFilters";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -44,6 +46,7 @@ type Participant = {
     participation_type?: string;
     invitation_status?: string;
     attendance_status?: string | null;
+    attendance?: { id: number; status: string } | null;
 };
 
 type AttendanceStatus = "present" | "absent" | "late";
@@ -103,7 +106,7 @@ function normalizeAttendance(
 function formatDate(date?: string) {
     if (!date) return "Date not set";
 
-    const parsedDate = new Date(`${date}T00:00:00`);
+    const parsedDate = new Date(`${date.slice(0, 10)}T00:00:00`);
 
     if (Number.isNaN(parsedDate.getTime())) return date;
 
@@ -140,7 +143,7 @@ export default function MeetingAttendance() {
         setMeetingsLoading(true);
 
         try {
-            const response = await api.get("/meeting-management/meetings");
+            const response = await api.get("/meeting-management/meetings?options=1");
             const rows = getRows<Meeting>(response);
 
             setMeetings(rows);
@@ -224,6 +227,8 @@ export default function MeetingAttendance() {
         (meeting) => String(meeting.id) === selectedMeetingId
     );
 
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const attendanceColumns = [{ key: "participant", label: "Participant" }, { key: "type", label: "Type" }, { key: "attendance", label: "Attendance" }, { key: "saved", label: "Saved Status" }];
     const filteredParticipants = useMemo(() => {
         return participants.filter((participant) => {
             const name = getParticipantName(participant).toLowerCase();
@@ -243,9 +248,12 @@ export default function MeetingAttendance() {
                     ? !attendance[participant.id]
                     : currentStatus === statusFilter);
 
-            return matchesSearch && matchesStatus;
+            return matchesSearch && matchesStatus && matchesRecordFilters({
+                participant: `${getParticipantName(participant)} ${participant.guest_company ?? ""} ${participant.participation_type ?? "required"}`,
+                type: participant.employee_id ? "Employee" : "Guest", attendance: attendance[participant.id] || "unmarked", saved: savedAttendance[participant.id] || "unmarked",
+            }, columnFilters);
         });
-    }, [participants, attendance, search, statusFilter]);
+    }, [participants, attendance, savedAttendance, search, statusFilter, columnFilters]);
 
     const markedCount = participants.filter(
         (participant) => Boolean(attendance[participant.id])
@@ -295,12 +303,7 @@ export default function MeetingAttendance() {
         setSavingIds((current) => [...current, participant.id]);
 
         try {
-            await api.patch(
-                `/meeting-management/meetings/${selectedMeetingId}/participants/${participant.id}`,
-                {
-                    attendance_status: value,
-                }
-            );
+            await api.post(`/meeting-management/meetings/${selectedMeetingId}/attendance`, { meeting_participant_id: participant.id, status: value });
 
             setSavedAttendance((current) => ({
                 ...current,
@@ -333,83 +336,18 @@ export default function MeetingAttendance() {
     };
 
     const saveAllAttendance = async () => {
-        const changedParticipants = participants.filter(
-            (participant) =>
-                (attendance[participant.id] || "") !==
-                (savedAttendance[participant.id] || "")
-        );
-
-        if (changedParticipants.length === 0) {
-            setError("There are no unsaved attendance changes.");
-            return;
-        }
-
-        const unmarkedChanged = changedParticipants.some(
-            (participant) => !attendance[participant.id]
-        );
-
-        if (unmarkedChanged) {
-            setError(
-                "Please select an attendance status for every changed participant."
-            );
-            return;
-        }
-
-        setSavingAll(true);
-        setError("");
-        setSuccess("");
-
-        const failedIds: number[] = [];
-        const successfulUpdates: Record<number, string> = {};
-
+        const changedParticipants = participants.filter(participant => (attendance[participant.id] || "") !== (savedAttendance[participant.id] || ""));
+        if (!changedParticipants.length) { setError("There are no unsaved attendance changes."); return; }
+        if (changedParticipants.some(participant => !attendance[participant.id])) { setError("Please select a status for every changed participant."); return; }
+        setSavingAll(true); setError(""); setSuccess("");
         try {
-            for (const participant of changedParticipants) {
-                try {
-                    await api.patch(
-                        `/meeting-management/meetings/${selectedMeetingId}/participants/${participant.id}`,
-                        {
-                            attendance_status: attendance[participant.id],
-                        }
-                    );
-
-                    successfulUpdates[participant.id] =
-                        attendance[participant.id];
-                } catch {
-                    failedIds.push(participant.id);
-                }
-            }
-
-            if (Object.keys(successfulUpdates).length > 0) {
-                setSavedAttendance((current) => ({
-                    ...current,
-                    ...successfulUpdates,
-                }));
-
-                setParticipants((current) =>
-                    current.map((participant) =>
-                        successfulUpdates[participant.id]
-                            ? {
-                                  ...participant,
-                                  attendance_status:
-                                      successfulUpdates[participant.id],
-                              }
-                            : participant
-                    )
-                );
-            }
-
-            if (failedIds.length > 0) {
-                setError(
-                    `${failedIds.length} attendance record(s) could not be saved. Please try again.`
-                );
-            } else {
-                setSuccess(
-                    `Attendance saved for ${changedParticipants.length} participant(s).`
-                );
-            }
-        } finally {
-            setSavingAll(false);
-        }
+            await api.put(`/meeting-management/meetings/${selectedMeetingId}/attendance`, {
+                attendances: changedParticipants.map(participant => ({ meeting_participant_id: participant.id, status: attendance[participant.id] })),
+            });
+            await fetchParticipants();
+            setSuccess(`Attendance saved for ${changedParticipants.length} participant(s).`);
+        } catch (err: any) { setError(getErrorMessage(err, "Attendance could not be saved.")); }
+        finally { setSavingAll(false); }
     };
 
     const markAllPresent = () => {
@@ -738,7 +676,7 @@ export default function MeetingAttendance() {
                                         Select a meeting to manage its attendance.
                                     </p>
                                 </div>
-                            ) : filteredParticipants.length === 0 ? (
+                            ) : participants.length === 0 ? (
                                 <div className="p-12 text-center">
                                     <ClipboardCheck
                                         size={36}
@@ -774,6 +712,7 @@ export default function MeetingAttendance() {
                                                     Action
                                                 </th>
                                             </tr>
+                                            <RecordColumnFilters columns={attendanceColumns} filters={columnFilters} onChange={(key, value) => setColumnFilters(current => ({ ...current, [key]: value }))} />
                                         </thead>
 
                                         <tbody className="divide-y divide-gray-100">
@@ -902,6 +841,7 @@ export default function MeetingAttendance() {
                                                             </td>
 
                                                             <td className="px-5 py-4 text-right">
+                                                                <DataLogButton resource={participant.attendance?.id ? "meeting_attendances" : "meeting_participants"} recordId={participant.attendance?.id ?? participant.id} />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() =>
@@ -940,6 +880,7 @@ export default function MeetingAttendance() {
                                                     );
                                                 }
                                             )}
+                                            {!filteredParticipants.length && <tr><td colSpan={5} className="p-6 text-center text-gray-500">No participants match the column filters.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>

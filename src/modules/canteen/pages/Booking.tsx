@@ -1,3 +1,4 @@
+import MyMealBookings, { type SavedMealBooking } from "../components/MyMealBookings";
 import {
   CalendarDays,
   Check,
@@ -19,6 +20,7 @@ import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
 import { getUser } from "../../../services/storage";
+import { canAccess } from "../../../services/permissions";
 
 type MenuItem = {
   id: number;
@@ -62,7 +64,7 @@ type Booking = {
   startDate: string;
   endDate: string;
   selectedMenus: Record<string, MenuOption | null>;
-  status: "Booked" | "Cancelled";
+  status: "Booked" | "Served" | "Cancelled";
   createdAt: string;
 };
 
@@ -491,7 +493,7 @@ const MealSelection = () => {
     >
   >({});
 
-  const [ bookings, setBookings, ] = useState<Booking[]>([]);
+  const [bookingsRevision, setBookingsRevision] = useState(0);
 
   const [
     editingBooking,
@@ -499,6 +501,8 @@ const MealSelection = () => {
   ] = useState<number | null>(
     null
   );
+
+  const canSaveBooking = canAccess("canteen", "meal-booking", null, editingBooking ? "update" : "create");
 
   const [
     showConfirm,
@@ -539,7 +543,7 @@ const MealSelection = () => {
         try {
           const response =
             await api.get(
-              "/meal-types"
+              "/meal-types", { params: { per_page: 500 } }
             );
 
           const mealTypes =
@@ -579,7 +583,7 @@ const MealSelection = () => {
         try {
           const response =
             await api.get(
-              "/menus"
+              "/booking-menus"
             );
 
           const apiMenus =
@@ -772,6 +776,10 @@ const MealSelection = () => {
 
   const validateBooking =
     () => {
+      if (!canSaveBooking) {
+        showMessage("error", "You do not have permission to save meal bookings.");
+        return false;
+      }
       if (
         !startDate ||
         !endDate
@@ -846,6 +854,7 @@ const MealSelection = () => {
 
   const confirmBooking =
     async () => {
+      if (!validateBooking()) return;
       if (!lunchMealType) {
         showMessage(
           "error",
@@ -904,25 +913,14 @@ const MealSelection = () => {
             }
           );
 
-        await api.post(
-          "/booking-meals",
-          {
-            employee_id:
-              employeeId,
-
-            meal_type_id:
-              lunchMealType.id,
-
-            start_date:
-              startDate,
-
-            end_date:
-              endDate,
-
-            bookings:
-              bookingsPayload,
-          }
-        );
+        if (editingBooking) {
+          if (bookingsPayload.length !== 1) throw new Error("Edit one booking date at a time.");
+          await api.put(`/booking-meal/${editingBooking}`, { employee_id: employeeId, meal_type_id: lunchMealType.id, ...bookingsPayload[0] });
+        } else {
+          await api.post("/booking-meals", { employee_id: employeeId, meal_type_id: lunchMealType.id,
+            start_date: startDate, end_date: endDate, bookings: bookingsPayload });
+        }
+        setBookingsRevision((value) => value + 1);
 
         showMessage(
           "success",
@@ -983,27 +981,15 @@ const MealSelection = () => {
     });
   };
 
-  const cancelBooking = (
-    id: number
-  ) => {
-    setBookings(
-      (prev) =>
-        prev.map(
-          (booking) =>
-            booking.id === id
-              ? {
-                  ...booking,
-                  status:
-                    "Cancelled",
-                }
-              : booking
-        )
-    );
-
-    showMessage(
-      "success",
-      "Booking cancelled."
-    );
+  const fromSavedBooking = (saved: SavedMealBooking): Booking => {
+    const items = saved.items.flatMap((item) => item.menu_item ? [item.menu_item] : []);
+    const option: MenuOption | null = saved.menu_id ? {
+      id: `saved-${saved.id}`, menuId: saved.menu_id, name: saved.meal_type?.name || "Selected menu", items,
+      selectedPairs: items.map((item) => ({ main_item_id: item.alternative_of || item.id, selected_item_id: item.id })),
+    } : null;
+    return { id: saved.id, startDate: saved.meal_date, endDate: saved.meal_date,
+      selectedMenus: { [getSelectionKey(saved.meal_date)]: option },
+      status: saved.status === "Selected" ? "Booked" : saved.status, createdAt: saved.created_at };
   };
 
   const getMenuForDetails = (
@@ -1588,6 +1574,9 @@ const MealSelection = () => {
                 </div>
               </div>
 
+              <MyMealBookings revision={bookingsRevision} mealTypeId={lunchMealType?.id}
+                onEdit={(saved) => editBooking(fromSavedBooking(saved))}
+                onDetails={(saved) => setShowDetails(fromSavedBooking(saved))} />
               {/* Summary Spacer */}
               <div className="h-24 sm:h-20" />
             </section>
@@ -1630,7 +1619,7 @@ const MealSelection = () => {
                     </div>
                   </div>
 
-                  <button
+                  {canSaveBooking && <button
                     onClick={openConfirmation}
                     className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900 transition hover:bg-slate-100 sm:w-auto sm:px-5 sm:py-3"
                   >
@@ -1644,7 +1633,7 @@ const MealSelection = () => {
                       size={17}
                       className="shrink-0"
                     />
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>
@@ -1870,7 +1859,7 @@ const MealSelection = () => {
                 </p>
 
                 <div className="mt-2 space-y-3">
-                  {bookingDates.map(
+                  {getDateRange(showDetails.startDate, showDetails.endDate).map(
                     (date) => {
                       const selectedMenu =
                         showDetails

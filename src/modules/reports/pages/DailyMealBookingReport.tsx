@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { ColumnFilterRow, useColumnFilters, downloadCsv, localToday, type FilterColumn } from "../components/TableTools";
 import {
     CalendarDays,
     CheckCircle2,
@@ -14,6 +16,7 @@ import { useEffect, useState } from "react";
 import SideNav from "../../../components/side-nav";
 import TopNav from "../../../components/top-nav";
 import api from "../../../services/api";
+import { canAccess } from "../../../services/permissions";
 
 
 interface MealType {
@@ -34,15 +37,26 @@ interface DailyReport {
 }
 
 
+const reportColumns: FilterColumn<DailyReport>[] = [
+    { key: "meal_date", label: "Date", value: (row) => row.meal_date },
+    { key: "meal_type_name", label: "Meal type", value: (row) => row.meal_type_name },
+    { key: "total_bookings", label: "Bookings", value: (row) => row.total_bookings },
+    { key: "selected_count", label: "Selected", value: (row) => row.selected_count },
+    { key: "served_count", label: "Served", value: (row) => row.served_count },
+    { key: "cancelled_count", label: "Cancelled", value: (row) => row.cancelled_count },
+    { key: "total_quantity", label: "Quantity", value: (row) => row.total_quantity },
+    { key: "total_amount", label: "Amount", value: (row) => row.total_amount },
+];
+
 export default function DailyMealBookingReport() {
+    const bookingReportPath = canAccess("reports", "meal-reports", "employee-bookings") ? "/reports/employee-bookings"
+        : canAccess("reports", "meal-reports", "cost") ? "/reports/cost" : null;
 
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [mealTypes, setMealTypes] = useState<MealType[]>([]);
 
-    const today = new Date()
-        .toISOString()
-        .split("T")[0];
+    const today = localToday();
 
     const [dateFrom, setDateFrom] = useState(today);
     const [dateTo, setDateTo] = useState(today);
@@ -51,6 +65,9 @@ export default function DailyMealBookingReport() {
     const [status, setStatus] = useState("");
 
     const [data, setData] = useState<DailyReport[]>([]);
+    const tableFilter = useColumnFilters(data, reportColumns);
+    const [reportError, setReportError] = useState("");
+
 
     const [summary, setSummary] = useState({
         total_bookings: 0,
@@ -115,6 +132,7 @@ export default function DailyMealBookingReport() {
     const loadReport = async () => {
 
         setLoading(true);
+        setReportError("");
 
         try {
 
@@ -183,6 +201,8 @@ export default function DailyMealBookingReport() {
             });
 
         } catch (error) {
+            setReportError((error as any)?.response?.data?.message || "Unable to load the report. Please try again.");
+            setData([]);
 
             console.error(
                 "Failed to load daily meal report:",
@@ -464,6 +484,8 @@ export default function DailyMealBookingReport() {
 
                         <div className="overflow-x-auto">
 
+                            {reportError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{reportError}</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500"><span>{tableFilter.rows.length} matching rows · Summary totals use the date and status filters.</span><div className="flex gap-3"><button type="button" onClick={tableFilter.reset} className="text-indigo-600">Clear column filters</button><button type="button" disabled={loading || !tableFilter.rows.length} onClick={() => downloadCsv("DailyMealBookingReport.csv", tableFilter.rows, reportColumns)} className="rounded-lg bg-indigo-600 px-3 py-2 font-semibold text-white disabled:opacity-50">Export CSV</button></div></div>
                             <table className="w-full text-sm">
 
                                 <thead className="bg-gray-50 border-b border-gray-100">
@@ -502,13 +524,15 @@ export default function DailyMealBookingReport() {
                                             Amount
                                         </th>
 
-                                    </tr>
+                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500">History</th>
+</tr>
 
-                                </thead>
+                                <ColumnFilterRow columns={[...reportColumns, null]} filters={tableFilter.filters} onChange={tableFilter.setFilter} />
+</thead>
 
                                 <tbody>
 
-                                    {data.map(
+                                    {tableFilter.rows.map(
                                         (row, index) => (
 
                                             <tr
@@ -550,7 +574,8 @@ export default function DailyMealBookingReport() {
                                                     ).toFixed(2)}
                                                 </td>
 
-                                            </tr>
+                                            <td className="px-4 py-3">{bookingReportPath ? <Link className="text-indigo-600 underline whitespace-nowrap" to={`${bookingReportPath}?date_from=${row.meal_date}&date_to=${row.meal_date}&meal_type_id=${row.meal_type_id}&status=${status}`}>View bookings &amp; logs</Link> : <span className="text-xs text-slate-400">Booking report access required</span>}</td>
+</tr>
 
                                         )
                                     )}
@@ -561,7 +586,7 @@ export default function DailyMealBookingReport() {
 
 
                             {!loading &&
-                                data.length === 0 && (
+                                tableFilter.rows.length === 0 && (
 
                                     <div className="py-14 text-center">
 

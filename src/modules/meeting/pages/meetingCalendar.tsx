@@ -87,7 +87,7 @@ export default function MeetingCalendar() {
         setError("");
 
         try {
-            const response = await api.get("/meeting-management/meetings");
+            const response = await api.get("/meeting-management/meetings?options=1");
 
             const rows =
                 response.data?.data?.data ??

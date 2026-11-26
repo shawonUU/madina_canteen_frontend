@@ -1,3 +1,6 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../components/ColumnFilters";
 import {
     Plus,
     Pencil,
@@ -54,6 +57,10 @@ const initialForm: MenuForm = {
 };
 
 export default function Menu() {
+  const canDelete = canAccess("admin", "system-management", "menu", "delete");
+  const canUpdate = canAccess("admin", "system-management", "menu", "update");
+  const canCreate = canAccess("admin", "system-management", "menu", "create");
+  const [columnFilters, setColumnFilters] = useState<Filters>({});
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [menus, setMenus] = useState<MenuData[]>([]);
@@ -78,7 +85,7 @@ export default function Menu() {
 
             const [menuResponse, moduleResponse] = await Promise.all([
                 api.get("/admin/menus"),
-                api.get("/admin/modules"),
+                api.get("/lookups/navigation"),
             ]);
 
             if (menuResponse.data.success) {
@@ -86,7 +93,7 @@ export default function Menu() {
             }
 
             if (moduleResponse.data.success) {
-                setModules(moduleResponse.data.data);
+                setModules(moduleResponse.data.data?.modules ?? []);
             }
         } catch (error) {
             console.error("Failed to load menus:", error);
@@ -237,14 +244,14 @@ export default function Menu() {
                                 />
                             </button>
 
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
                                 <Plus size={18} />
                                 Add Menu
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 
@@ -315,10 +322,11 @@ export default function Menu() {
                                                 Action
                                             </th>
                                         </tr>
-                                    </thead>
+                                    <ColumnFilters columns={[null, { key: "module", label: "Module" }, { key: "name", label: "Name / slug" }, { key: "route", label: "Route" }, { key: "permission", label: "Permission" }, { key: "status", label: "Status", options: ["Active", "Inactive"] }, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                                     <tbody className="divide-y divide-gray-100">
-                                        {menus.map((menu, index) => (
+                                        {menus.filter((item) => matchesColumns({module: item.module?.name, name: `${item.name} ${item.slug}`, route: item.route, permission: item.permission, status: item.is_active ? "Active" : "Inactive"}, columnFilters)).map((menu, index) => (
                                             <tr
                                                 key={menu.id}
                                                 className="hover:bg-gray-50 transition"
@@ -374,7 +382,8 @@ export default function Menu() {
 
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <button
+<DataLogButton resource="menus" recordId={menu.id} />
+                                                        {canUpdate && (<button
                                                             type="button"
                                                             onClick={() =>
                                                                 openEditModal(
@@ -384,9 +393,9 @@ export default function Menu() {
                                                             className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition"
                                                         >
                                                             <Pencil size={16} />
-                                                        </button>
+                                                        </button>)}
 
-                                                        <button
+                                                        {canDelete && (<button
                                                             type="button"
                                                             onClick={() =>
                                                                 handleDelete(
@@ -396,7 +405,7 @@ export default function Menu() {
                                                             className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition"
                                                         >
                                                             <Trash2 size={16} />
-                                                        </button>
+                                                        </button>)}
                                                     </div>
                                                 </td>
                                             </tr>

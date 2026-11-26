@@ -1,3 +1,6 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
+import { ColumnFilterRow, useColumnFilters, type FilterColumn } from "../../reports/components/TableTools";
 import {
     CalendarDays,
     Check,
@@ -334,7 +337,7 @@ export default function MealServing() {
     // Filter Bookings
     // -------------------------------------------------------------------------
 
-    const filteredBookings =
+    const searchedBookings =
         bookings.filter((booking) => {
 
             // Status filter
@@ -406,6 +409,18 @@ export default function MealServing() {
 
         });
 
+
+    const columns: FilterColumn<Booking>[] = [
+        { key: "employee", label: "Employee", value: (row) => `${getEmployeeName(row)} ${getEmployeeCode(row)}` },
+        { key: "meal", label: "Meal", value: (row) => row.meal_type?.name },
+        { key: "items", label: "Selected items", value: (row) => row.items?.map(getItemName).join(" ") },
+        { key: "rate", label: "Rate", value: (row) => row.meal_rate },
+        { key: "quantity", label: "Quantity", value: (row) => row.quantity },
+        { key: "total", label: "Total", value: (row) => row.total_amount },
+        { key: "status", label: "Status", value: (row) => row.status },
+    ];
+    const tableFilter = useColumnFilters(searchedBookings, columns);
+    const filteredBookings = tableFilter.rows;
 
     // -------------------------------------------------------------------------
     // Statistics
@@ -861,7 +876,7 @@ export default function MealServing() {
 
                         </div>
 
-                    ) : filteredBookings.length === 0 ? (
+                    ) : bookings.length === 0 ? (
 
 
                         /* -----------------------------------------------------------------
@@ -940,7 +955,7 @@ export default function MealServing() {
 
                             <div className="overflow-x-auto">
 
-                                <table className="w-full min-w-[1150px]">
+                                <table className="w-full min-w-[1050px]">
 
 
                                     {/* -------------------------------------------------
@@ -985,6 +1000,7 @@ export default function MealServing() {
 
                                         </tr>
 
+                                    <ColumnFilterRow columns={[...columns, null]} filters={tableFilter.filters} onChange={tableFilter.setFilter} />
                                     </thead>
 
 
@@ -1301,11 +1317,14 @@ export default function MealServing() {
                                                         -------------------------------------------------- */}
 
                                                         <td className="px-5 py-4 text-center">
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <DataLogButton resource="employee_meals" recordId={booking.id} />
+
 
                                                             {booking.status ===
                                                                 "Selected" ? (
 
-                                                                <button
+                                                                canAccess("canteen", "serve-meal", null, "update") && (<button
                                                                     type="button"
                                                                     onClick={() =>
                                                                         handleServeMeal(
@@ -1349,7 +1368,7 @@ export default function MealServing() {
 
                                                                     )}
 
-                                                                </button>
+                                                                </button>) 
 
                                                             ) : booking.status ===
                                                                 "Served" ? (
@@ -1382,6 +1401,7 @@ export default function MealServing() {
 
                                                             )}
 
+                                                            </div>
                                                         </td>
 
                                                     </tr>

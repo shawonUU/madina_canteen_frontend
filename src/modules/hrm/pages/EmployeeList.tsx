@@ -1,3 +1,6 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
+import ColumnFilters, { type Filters } from "../../admin/components/ColumnFilters";
 import { useEffect, useState } from "react";
 import {
   Plus,
@@ -81,6 +84,10 @@ const initialForm: EmployeeForm = {
 };
 
 export default function EmployeeList() {
+  const canDelete = canAccess("hrm", "employee-management", "employee-list", "delete");
+  const canUpdate = canAccess("hrm", "employee-management", "employee-list", "update");
+  const canCreate = canAccess("hrm", "employee-management", "employee-list", "create");
+    const [columnFilters, setColumnFilters] = useState<Filters>({});
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [designations, setDesignations] = useState<Designation[]>([]);
@@ -207,7 +214,7 @@ export default function EmployeeList() {
     try {
       setDepartmentsLoading(true);
 
-      const response = await api.get("/hrm/departments");
+      const response = await api.get("/lookups/departments");
       setDepartments(normalizeListResponse(response.data));
     } catch (error) {
       console.error("Failed to fetch departments:", error);
@@ -217,18 +224,12 @@ export default function EmployeeList() {
     }
   };
 
-  const fetchDesignations = async (departmentId: string) => {
-    if (!departmentId) {
-      setDesignations([]);
-      return;
-    }
+  const fetchDesignations = async (_departmentId = "") => {
 
     try {
       setDesignationsLoading(true);
 
-      const response = await api.get("/hrm/designations", {
-        params: { department_id: departmentId },
-      });
+      const response = await api.get("/lookups/designations");
 
       setDesignations(normalizeListResponse(response.data));
     } catch (error) {
@@ -249,6 +250,7 @@ export default function EmployeeList() {
           per_page: 15,
           search: search.trim() || undefined,
           status: statusFilter || undefined,
+          ...Object.fromEntries(Object.entries(columnFilters).map(([key, value]) => [`filter[${key}]`, value])),
         },
       });
 
@@ -281,10 +283,11 @@ export default function EmployeeList() {
 
   useEffect(() => {
     fetchEmployees(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, columnFilters]);
 
   useEffect(() => {
     fetchDepartments();
+    fetchDesignations();
   }, []);
 
   const openCreateModal = () => {
@@ -292,7 +295,7 @@ export default function EmployeeList() {
     setForm({
       ...initialForm,
     });
-    setDesignations([]);
+    void fetchDesignations();
     setOpenModal(true);
   };
 
@@ -310,15 +313,11 @@ export default function EmployeeList() {
       phone: employee.phone || "",
       email: employee.email || "",
       status: employee.status || "Active",
-      create_user: !!user,
+      create_user: user?.status === "Active",
       user_password: "",
     });
 
-    if (employee.department) {
-      fetchDesignations(String(employee.department));
-    } else {
-      setDesignations([]);
-    }
+    void fetchDesignations();
 
     setOpenModal(true);
   };
@@ -351,7 +350,6 @@ export default function EmployeeList() {
     setForm((previous) => ({
       ...previous,
       department: departmentId,
-      designation: "",
     }));
 
     fetchDesignations(departmentId);
@@ -375,7 +373,7 @@ export default function EmployeeList() {
 
 
     if (
-      !editId &&
+      (!editId || !employees.find((employee) => employee.id === editId)?.user) &&
       form.create_user &&
       !form.user_password
     ) {
@@ -388,10 +386,10 @@ export default function EmployeeList() {
     if (
       form.create_user &&
       form.user_password &&
-      form.user_password.length < 6
+      form.user_password.length < 8
     ) {
       alert(
-        "Password must be at least 6 characters."
+        "Password must be at least 8 characters."
       );
       return false;
     }
@@ -603,7 +601,7 @@ export default function EmployeeList() {
                   Refresh
                 </button>
 
-                <button
+                {canCreate && (<button
                   type="button"
                   onClick={openCreateModal}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700"
@@ -611,7 +609,7 @@ export default function EmployeeList() {
                   <Plus size={18} />
 
                   Add Employee
-                </button>
+                </button>)}
               </div>
             </div>
 
@@ -695,6 +693,12 @@ export default function EmployeeList() {
                         Actions
                       </th>
                     </tr>
+                    <ColumnFilters columns={[
+                      { key: "employee", label: "name / code" }, { key: "department", label: "department" },
+                      { key: "designation", label: "designation" }, { key: "contact", label: "phone / email" },
+                      { key: "system_access", label: "access", options: ["Enabled", "Disabled", "No Login"] },
+                      { key: "status", label: "status", options: ["Active", "Inactive"] }, null,
+                    ]} values={columnFilters} onChange={setColumnFilters} />
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
@@ -740,7 +744,7 @@ export default function EmployeeList() {
                               to get started.
                             </p>
 
-                            <button
+                            {canCreate && (<button
                               type="button"
                               onClick={
                                 openCreateModal
@@ -752,7 +756,7 @@ export default function EmployeeList() {
                               />
 
                               Add Employee
-                            </button>
+                            </button>)}
                           </div>
                         </td>
                       </tr>
@@ -830,7 +834,7 @@ export default function EmployeeList() {
                                       }
                                     />
 
-                                    Enabled
+                                    {employee.user.status === "Active" ? "Enabled" : "Disabled"}
                                   </div>
 
                                 </div>
@@ -855,7 +859,8 @@ export default function EmployeeList() {
 
                             <td className="px-5 py-4">
                               <div className="flex items-center justify-end gap-2">
-                                <button
+<DataLogButton resource="employees" recordId={employee.id} />
+                                {canUpdate && (<button
                                   type="button"
                                   onClick={() =>
                                     openEditModal(
@@ -868,9 +873,9 @@ export default function EmployeeList() {
                                   <Pencil
                                     size={16}
                                   />
-                                </button>
+                                </button>)}
 
-                                <button
+                                {canDelete && (<button
                                   type="button"
                                   onClick={() =>
                                     handleDelete(
@@ -899,7 +904,7 @@ export default function EmployeeList() {
                                       }
                                     />
                                   )}
-                                </button>
+                                </button>)}
                               </div>
                             </td>
                           </tr>
@@ -1120,15 +1125,11 @@ export default function EmployeeList() {
                       onChange={(event) =>
                         handleChange("designation", event.target.value)
                       }
-                      disabled={!form.department || designationsLoading}
+                      disabled={designationsLoading}
                       className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="">
-                        {!form.department
-                          ? "Select Department First"
-                          : designationsLoading
-                            ? "Loading designations..."
-                            : "Select Designation"}
+                        {designationsLoading ? "Loading designations..." : "Select Designation"}
                       </option>
                       {designations.map((designation) => (
                         <option key={designation.id} value={String(designation.id)}>

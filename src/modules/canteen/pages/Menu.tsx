@@ -1,3 +1,6 @@
+import { canAccess } from "../../../services/permissions";
+import DataLogButton from "../../../components/DataLogButton";
+import { useColumnFilters, type FilterColumn } from "../../reports/components/TableTools";
 import {
     Plus,
     Edit,
@@ -76,11 +79,19 @@ const extractArray = <T,>(response: any): T[] => {
    COMPONENT
 ============================================================ */
 
+const columns: FilterColumn<Menu>[] = [
+    { key: "id", label: "ID", value: (row) => row.id },
+    { key: "menu_date", label: "Date", value: (row) => row.menu_date },
+    { key: "meal_type", label: "Meal", value: (row) => row.meal_type?.name },
+    { key: "items", label: "Items / alternatives", value: (row) => row.items.map((item) => `${item.name} ${item.alternate?.name ?? ""}`).join(" ") },
+];
+
 export default function MenuPage() {
 
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [menus, setMenus] = useState<Menu[]>([]);
+    const tableFilter = useColumnFilters(menus, columns);
     const [mealTypes, setMealTypes] = useState<MealType[]>([]);
 
     const [loading, setLoading] = useState(false);
@@ -137,7 +148,7 @@ export default function MenuPage() {
                 params.search = search.trim();
             }
 
-            const res = await api.get("/menus", {
+            const res = await api.get("/meal-menus", {
                 params,
             });
 
@@ -162,7 +173,7 @@ export default function MenuPage() {
 
     const loadMealTypes = async () => {
         try {
-            const res = await api.get("/meal-types");
+            const res = await api.get("/meal-types", { params: { per_page: 500 } });
 
             setMealTypes(
                 extractArray<MealType>(res.data)
@@ -230,7 +241,7 @@ export default function MenuPage() {
             setSaving(true);
 
             const res = await api.get(
-                `/menus/${menu.id}`
+                `/meal-menus/${menu.id}`
             );
 
             const data: Menu =
@@ -477,7 +488,7 @@ export default function MenuPage() {
 
             if (editId) {
                 await api.put(
-                    `/menus/${editId}`,
+                    `/meal-menus/${editId}`,
                     payload
                 );
 
@@ -486,7 +497,7 @@ export default function MenuPage() {
                 );
             } else {
                 await api.post(
-                    "/menus",
+                    "/meal-menus",
                     payload
                 );
 
@@ -536,7 +547,7 @@ export default function MenuPage() {
     ) => {
         try {
             const res = await api.get(
-                `/menus/${menu.id}`
+                `/meal-menus/${menu.id}`
             );
 
             const data =
@@ -572,7 +583,7 @@ export default function MenuPage() {
             setDeleting(true);
 
             await api.delete(
-                `/menus/${deleteTarget.id}`
+                `/meal-menus/${deleteTarget.id}`
             );
 
             setShowDeleteModal(false);
@@ -730,7 +741,7 @@ export default function MenuPage() {
                         </div>
 
 
-                        <button
+                        {canAccess("canteen", "meal-menu", null, "create") && (<button
                             onClick={
                                 openCreateModal
                             }
@@ -741,7 +752,7 @@ export default function MenuPage() {
 
                             Create Menu
 
-                        </button>
+                        </button>)} 
 
                     </div>
 
@@ -937,7 +948,16 @@ export default function MenuPage() {
                         MENU LIST
                     ================================================= */}
 
-                    {loading ? (
+                    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-[70px_150px_130px_1fr_130px] md:px-4">
+                        {columns.map((column) => <label key={column.key} className="text-xs text-slate-500">
+                            <span className="md:sr-only">{column.label}</span>
+                            <input aria-label={`Filter ${column.label}`} value={tableFilter.filters[column.key] ?? ""}
+                                onChange={(event) => tableFilter.setFilter(column.key, event.target.value)}
+                                placeholder={`Filter ${column.label}`}
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700 md:mt-0" />
+                        </label>)}
+                    </div>
+                                        {loading ? (
 
                         <div className="bg-white border border-slate-200 rounded-2xl py-12 text-center">
 
@@ -952,7 +972,7 @@ export default function MenuPage() {
 
                         </div>
 
-                    ) : menus.length === 0 ? (
+                    ) : tableFilter.rows.length === 0 ? (
 
                         <div className="bg-white border border-slate-200 rounded-2xl py-12 text-center">
 
@@ -975,7 +995,7 @@ export default function MenuPage() {
 
                         <div className="space-y-1.5">
 
-                            {menus.map(
+                            {tableFilter.rows.map(
                                 (menu) => (
 
                                     <div
@@ -1083,7 +1103,8 @@ export default function MenuPage() {
 
                                             {/* Actions */}
 
-                                            <div className="flex justify-end gap-1.5">
+                                            <div className="flex justify-end gap-1.5 flex-wrap">
+                                                <DataLogButton resource="meal_menus" recordId={menu.id} />
 
                                                 <button
                                                     onClick={() =>
@@ -1102,7 +1123,7 @@ export default function MenuPage() {
                                                 </button>
 
 
-                                                <button
+                                                {canAccess("canteen", "meal-menu", null, "update") && (<button
                                                     onClick={() =>
                                                         openEditModal(
                                                             menu
@@ -1116,10 +1137,10 @@ export default function MenuPage() {
                                                             16
                                                         }
                                                     />
-                                                </button>
+                                                </button>)} 
 
 
-                                                <button
+                                                {canAccess("canteen", "meal-menu", null, "delete") && (<button
                                                     onClick={() =>
                                                         confirmDelete(
                                                             menu
@@ -1133,7 +1154,7 @@ export default function MenuPage() {
                                                             16
                                                         }
                                                     />
-                                                </button>
+                                                </button>)} 
 
                                             </div>
 
@@ -1178,8 +1199,8 @@ export default function MenuPage() {
                                                 </div>
 
 
-                                                <div className="flex gap-1">
-
+                                                <div className="flex gap-1 flex-wrap">
+                                                    <DataLogButton resource="meal_menus" recordId={menu.id} />
                                                     <button
                                                         onClick={() =>
                                                             openDetails(
@@ -1195,7 +1216,7 @@ export default function MenuPage() {
                                                         />
                                                     </button>
 
-                                                    <button
+                                                    {canAccess("canteen", "meal-menu", null, "update") && (<button
                                                         onClick={() =>
                                                             openEditModal(
                                                                 menu
@@ -1208,9 +1229,9 @@ export default function MenuPage() {
                                                                 15
                                                             }
                                                         />
-                                                    </button>
+                                                    </button>)} 
 
-                                                    <button
+                                                    {canAccess("canteen", "meal-menu", null, "delete") && (<button
                                                         onClick={() =>
                                                             confirmDelete(
                                                                 menu
@@ -1223,7 +1244,7 @@ export default function MenuPage() {
                                                                 15
                                                             }
                                                         />
-                                                    </button>
+                                                    </button>)} 
 
                                                 </div>
 

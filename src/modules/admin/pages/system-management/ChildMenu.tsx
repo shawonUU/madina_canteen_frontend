@@ -1,3 +1,6 @@
+import { canAccess } from "../../../../services/permissions";
+import DataLogButton from "../../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../components/ColumnFilters";
 import {
     Plus,
     Pencil,
@@ -70,6 +73,10 @@ const initialForm: ChildMenuForm = {
 };
 
 export default function ChildMenu() {
+  const canDelete = canAccess("admin", "system-management", "child-menu", "delete");
+  const canUpdate = canAccess("admin", "system-management", "child-menu", "update");
+  const canCreate = canAccess("admin", "system-management", "child-menu", "create");
+  const [columnFilters, setColumnFilters] = useState<Filters>({});
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [childMenus, setChildMenus] = useState<ChildMenuData[]>([]);
@@ -96,7 +103,7 @@ export default function ChildMenu() {
             const [childMenuResponse, moduleResponse] =
                 await Promise.all([
                     api.get("/admin/child-menus"),
-                    api.get("/admin/modules"),
+                    api.get("/lookups/navigation"),
                 ]);
 
             if (childMenuResponse.data.success) {
@@ -104,7 +111,7 @@ export default function ChildMenu() {
             }
 
             if (moduleResponse.data.success) {
-                setModules(moduleResponse.data.data);
+                setModules(moduleResponse.data.data?.modules ?? []);
             }
         } catch (error) {
             console.error("Failed to load child menus:", error);
@@ -122,11 +129,11 @@ export default function ChildMenu() {
 
         try {
             const response = await api.get(
-                `/admin/menus?module_id=${moduleId}`
+                "/lookups/navigation"
             );
 
             if (response.data.success) {
-                setMenus(response.data.data);
+                setMenus((response.data.data?.menus ?? []).filter((menu: MenuData) => String(menu.module_id) === moduleId));
             } else {
                 setMenus([]);
             }
@@ -350,14 +357,14 @@ export default function ChildMenu() {
                                 />
                             </button>
 
-                            <button
+                            {canCreate && (<button
                                 type="button"
                                 onClick={openCreateModal}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold shadow-sm hover:bg-indigo-700 transition"
                             >
                                 <Plus size={18} />
                                 Add Child Menu
-                            </button>
+                            </button>)}
                         </div>
                     </div>
 
@@ -432,10 +439,11 @@ export default function ChildMenu() {
                                                 Action
                                             </th>
                                         </tr>
-                                    </thead>
+                                    <ColumnFilters columns={[null, { key: "module", label: "Module" }, { key: "menu", label: "Menu" }, { key: "name", label: "Name / slug" }, { key: "route", label: "Route" }, { key: "permission", label: "Permission" }, { key: "status", label: "Status", options: ["Active", "Inactive"] }, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                                     <tbody className="divide-y divide-gray-100">
-                                        {childMenus.map(
+                                        {childMenus.filter((item) => matchesColumns({module: item.menu?.module?.name, menu: item.menu?.name, name: `${item.name} ${item.slug}`, route: item.route, permission: item.permission, status: item.is_active ? "Active" : "Inactive"}, columnFilters)).map(
                                             (childMenu, index) => (
                                                 <tr
                                                     key={
@@ -512,7 +520,8 @@ export default function ChildMenu() {
 
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            <button
+<DataLogButton resource="child_menus" recordId={childMenu.id} />
+                                                            {canUpdate && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openEditModal(
@@ -526,9 +535,9 @@ export default function ChildMenu() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
 
-                                                            <button
+                                                            {canDelete && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     handleDelete(
@@ -542,7 +551,7 @@ export default function ChildMenu() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
                                                         </div>
                                                     </td>
                                                 </tr>

@@ -1,15 +1,16 @@
+import { lazy } from "react";
 
 import type { RouteObject } from "react-router-dom";
 
-import SupportDashboard from "./pages/SupportDashboard";
-import TicketList from "./pages/TicketList";
-import CreateTicket from "./pages/CreateTicket";
-import ViewTicket from "./pages/ViewTicket";
-import AssignedTickets from "./pages/AssignedTickets";
-import AllTickets from "./pages/AllTickets";
-import TicketSummary from "./pages/reports/TicketSummary";
-import ResolutionReport from "./pages/reports/ResolutionReport";
-import EditTicket from "./pages/EditTicket";
+const SupportDashboard = lazy(() => import("./pages/SupportDashboard"));
+const TicketList = lazy(() => import("./pages/TicketList"));
+const CreateTicket = lazy(() => import("./pages/CreateTicket"));
+const ViewTicket = lazy(() => import("./pages/ViewTicket"));
+const AssignedTickets = lazy(() => import("./pages/AssignedTickets"));
+const AllTickets = lazy(() => import("./pages/AllTickets"));
+const TicketSummary = lazy(() => import("./pages/reports/TicketSummary"));
+const ResolutionReport = lazy(() => import("./pages/reports/ResolutionReport"));
+const EditTicket = lazy(() => import("./pages/EditTicket"));
 
 export const supportRoutes: RouteObject[] = [
     {

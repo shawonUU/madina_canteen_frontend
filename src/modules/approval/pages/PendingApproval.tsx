@@ -1,3 +1,5 @@
+import DataLogButton from "../../../components/DataLogButton";
+import ColumnFilters, { matchesColumns, type Filters } from "../../admin/components/ColumnFilters";
 import {
     Check,
     Eye,
@@ -20,6 +22,8 @@ interface ApprovalLevel {
     name: string;
     approver_type: "Role" | "User" | "Department Role";
     status: string;
+    can_reject?: boolean | number;
+    can_return?: boolean | number;
 }
 
 interface ApprovalRequest {
@@ -52,6 +56,8 @@ interface ApprovalActionModal {
 }
 
 export default function PendingApproval() {
+    const [columnFilters, setColumnFilters] = useState<Filters>({});
+    const [loadError, setLoadError] = useState("");
     const [openSidebar, setOpenSidebar] = useState(false);
 
     const [requests, setRequests] = useState<ApprovalRequest[]>(
@@ -81,6 +87,7 @@ export default function PendingApproval() {
         isRefresh = false
     ) => {
         try {
+            setLoadError("");
             if (isRefresh) {
                 setRefreshing(true);
             } else {
@@ -88,24 +95,19 @@ export default function PendingApproval() {
             }
 
             const response = await api.get(
-                "/approvals"
+                "/approvals", { params: { all: 1 } }
             );
 
             if (
                 response.data.success ||
                 response.data.status === "Success"
             ) {
-                setRequests(
-                    response.data.data?.data ||
-                        response.data.data ||
-                        []
-                );
+                const rows = response.data.data?.data || response.data.data || [];
+                setRequests(rows.map((item: any) => ({ ...item, total_levels: item.total_levels ?? new Set((item.levels ?? []).map((level: any) => level.level_no)).size })));
+
             }
         } catch (error) {
-            console.error(
-                "Failed to load pending approvals:",
-                error
-            );
+            setLoadError((error as any)?.response?.data?.message ?? "Unable to load pending approvals.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -223,12 +225,12 @@ export default function PendingApproval() {
             }
 
             await api.post(endpoint, {
-                comment:
+                remarks:
                     actionComment.trim() || null,
             });
 
-            closeActionModal();
-
+            setActionModal({ open: false, type: null, request: null });
+            setActionComment("");
             await fetchPendingApprovals(true);
         } catch (error: any) {
             console.error(
@@ -310,6 +312,7 @@ export default function PendingApproval() {
                 />
 
                 <div className="p-4 lg:p-6 overflow-y-auto h-[calc(100vh-64px)]">
+{loadError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{loadError}</p>}
 
                     {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-7">
@@ -407,7 +410,7 @@ export default function PendingApproval() {
                                     Loading pending approvals...
                                 </p>
                             </div>
-                        ) : filteredRequests.length ===
+                        ) : requests.length ===
                           0 ? (
                             <div className="py-16 text-center">
                                 <Clock
@@ -460,10 +463,11 @@ export default function PendingApproval() {
                                                 Action
                                             </th>
                                         </tr>
-                                    </thead>
+                                    <ColumnFilters columns={[null, {key:"document",label:"document"}, {key:"requester",label:"requester"}, {key:"workflow",label:"workflow"}, {key:"level",label:"level"}, {key:"submitted",label:"submitted date"}, {key:"status",label:"status",options:["Pending"]}, null]} values={columnFilters} onChange={setColumnFilters} />
+</thead>
 
                                     <tbody className="divide-y divide-gray-100">
-                                        {filteredRequests.map(
+                                        {filteredRequests.filter((item) => matchesColumns({ document: `${item.document_type} ${item.document_no ?? item.document_id}`, requester: item.requester?.name, workflow: item.workflow?.name, level: `${item.current_level}/${item.total_levels}`, submitted: `${item.submitted_at ?? item.created_at ?? ""} ${formatDate(item.submitted_at || item.created_at)}`, status:item.status }, columnFilters)).map(
                                             (
                                                 request,
                                                 index
@@ -559,6 +563,7 @@ export default function PendingApproval() {
 
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center justify-end gap-2">
+<DataLogButton resource="approval_requests" recordId={request.id} />
 
                                                             {/* View */}
                                                             <button
@@ -598,7 +603,7 @@ export default function PendingApproval() {
                                                             </button>
 
                                                             {/* Return */}
-                                                            <button
+                                                            {Boolean(request.current_level_data?.can_return ?? true) && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openActionModal(
@@ -614,10 +619,10 @@ export default function PendingApproval() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
 
                                                             {/* Reject */}
-                                                            <button
+                                                            {Boolean(request.current_level_data?.can_reject ?? true) && (<button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     openActionModal(
@@ -633,7 +638,7 @@ export default function PendingApproval() {
                                                                         16
                                                                     }
                                                                 />
-                                                            </button>
+                                                            </button>)}
                                                         </div>
                                                     </td>
                                                 </tr>
